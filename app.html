@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grocery Family Dashboard</title>
+  <style>
+    :root {
+      --bg1: #eef4ff;
+      --bg2: #f8fbff;
+      --card: rgba(255, 255, 255, 0.94);
+      --border: rgba(15, 23, 42, 0.10);
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warn: #b45309;
+      --shadow: 0 20px 60px rgba(37, 99, 235, 0.10);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.14), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.10), transparent 24%),
+        linear-gradient(180deg, var(--bg1), var(--bg2));
+    }
+
+    .wrap {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .topbar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      padding: 18px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 240px;
+    }
+
+    .logo {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), #60a5fa);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      font-weight: 700;
+      box-shadow: 0 12px 22px rgba(37, 99, 235, 0.22);
+      flex: 0 0 auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.1;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
+    .pill,
+    .date-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+    }
+
+    .pill {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .pill strong {
+      font-size: 13px;
+    }
+
+    .date-box label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-right: 4px;
+    }
+
+    .date-box input[type="date"] {
+      border: 0;
+      outline: none;
+      font: inherit;
+      color: var(--text);
+      background: transparent;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: rgba(220, 38, 38, 0.12);
+      color: var(--danger);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0 8px;
+    }
+
+    .notice {
+      display: none;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid transparent;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .notice.show { display: block; }
+
+    .notice.success {
+      background: rgba(22, 163, 74, 0.08);
+      border-color: rgba(22, 163, 74, 0.18);
+      color: var(--success);
+    }
+
+    .notice.error {
+      background: rgba(220, 38, 38, 0.08);
+      border-color: rgba(220, 38, 38, 0.18);
+      color: var(--danger);
+    }
+
+    .notice.info {
+      background: rgba(37, 99, 235, 0.08);
+      border-color: rgba(37, 99, 235, 0.18);
+      color: var(--primary);
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.55);
+    }
+
+    .tab-btn {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      padding: 15px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      background: rgba(37, 99, 235, 0.06);
+      box-shadow: inset 0 -3px 0 var(--primary);
+    }
+
+    .content {
+      padding: 18px;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.85fr;
+      gap: 18px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+      padding: 16px;
+    }
+
+    .card h2,
+    .card h3 {
+      margin: 0 0 10px;
+      line-height: 1.2;
+    }
+
+    .card h2 { font-size: 20px; }
+    .card h3 { font-size: 16px; }
+
+    .subtext {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      margin: -2px 0 14px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1.1fr 0.5fr 0.6fr auto;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .row input,
+    .row select,
+    .search input,
+    .quick input,
+    .range-fields input,
+    .full input,
+    .full select,
+    .full textarea {
+      width: 100%;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 14px;
+      padding: 12px 13px;
+      font-size: 14px;
+      outline: none;
+      background: #fff;
+      color: var(--text);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .row input:focus,
+    .row select:focus,
+    .search input:focus,
+    .quick input:focus,
+    .range-fields input:focus,
+    .full input:focus,
+    .full select:focus,
+    .full textarea:focus {
+      border-color: rgba(37, 99, 235, 0.7);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
+    }
+
+    .row select,
+    .range-select,
+    .inline-edit select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 16px) calc(50% - 2px), calc(100% - 11px) calc(50% - 2px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 34px;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s, opacity 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+
+    .btn.primary {
+      background: linear-gradient(135deg, var(--primary), #4f83f1);
+      color: #fff;
+      box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
+    }
+
+    .btn.secondary {
+      background: rgba(15, 23, 42, 0.05);
+      color: var(--text);
+    }
+
+    .btn.today {
+      background: linear-gradient(135deg, #f59e0b, #f97316);
+      color: #fff;
+      box-shadow: 0 10px 18px rgba(249, 115, 22, 0.22);
+    }
+
+    .btn.input-like {
+      width: 100%;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      background: #fff;
+      color: var(--primary);
+      box-shadow: none;
+    }
+
+    .btn.input-like:hover {
+      border-color: rgba(37, 99, 235, 0.7);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
+      transform: none;
+    }
+
+    .btn.danger {
+      background: rgba(220, 38, 38, 0.10);
+      color: var(--danger);
+    }
+
+    .btn.small {
+      padding: 9px 11px;
+      font-size: 13px;
+      border-radius: 12px;
+    }
+
+    .btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .item {
+      border: 1px solid rgba(15, 23, 42, 0.10);
+      border-radius: 16px;
+      padding: 13px 14px;
+      background: #fff;
+      display: grid;
+      gap: 10px;
+    }
+
+    .item.purchased {
+      border-color: rgba(22, 163, 74, 0.28);
+      background: linear-gradient(180deg, #f0fdf4, #ffffff);
+      box-shadow: 0 10px 24px rgba(22, 163, 74, 0.08);
+    }
+
+    .item.purchased .item-title {
+      color: #166534;
+    }
+
+    .item.purchased .item-actions .btn.secondary {
+      opacity: 0.55;
+    }
+
+    .item.purchased .inline-edit input,
+    .item.purchased .inline-edit select {
+      background: #f8fafc;
+      color: #64748b;
+      cursor: not-allowed;
+    }
+
+    .item.disabled {
+      border-color: rgba(249, 115, 22, 0.28);
+      background: linear-gradient(180deg, #fff7ed, #ffffff);
+      box-shadow: 0 10px 24px rgba(249, 115, 22, 0.08);
+    }
+
+    .item.disabled .item-title {
+      color: #9a3412;
+    }
+
+    .item.disabled .item-meta {
+      color: #b45309;
+    }
+
+    .item-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .item-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0;
+      line-height: 1.3;
+    }
+
+    .item-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    .item-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .inline-edit {
+      display: grid;
+      grid-template-columns: 1fr 110px 90px;
+      gap: 10px;
+    }
+
+    .inline-edit input {
+      border: 1px solid rgba(37, 99, 235, 0.20);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 14px;
+      background: linear-gradient(180deg, #ffffff, #f7faff);
+      color: var(--text);
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .inline-edit input::placeholder {
+      color: #7b8aa3;
+    }
+
+    .inline-edit input:focus {
+      border-color: rgba(37, 99, 235, 0.78);
+      background: #fff;
+      box-shadow:
+        0 0 0 4px rgba(37, 99, 235, 0.12),
+        0 6px 16px rgba(37, 99, 235, 0.10);
+    }
+
+    .inline-edit select {
+      border: 1px solid rgba(37, 99, 235, 0.20);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 14px;
+      background: linear-gradient(180deg, #ffffff, #f7faff);
+      color: var(--text);
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .inline-edit select:focus {
+      border-color: rgba(37, 99, 235, 0.78);
+      background: #fff;
+      box-shadow:
+        0 0 0 4px rgba(37, 99, 235, 0.12),
+        0 6px 16px rgba(37, 99, 235, 0.10);
+    }
+
+    .inline-edit-wrap {
+      display: grid;
+      gap: 6px;
+    }
+
+    .inline-edit-labels {
+      display: grid;
+      grid-template-columns: 1fr 110px 90px;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0 2px;
+    }
+
+    .buyer-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 13px;
+      border: 1px solid rgba(15, 23, 42, 0.09);
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fff, #fbfdff);
+    }
+
+    .buyer-item strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+
+    .buyer-item span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .buyer-item .state {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .state.done {
+      background: rgba(22, 163, 74, 0.10);
+      color: var(--success);
+    }
+
+    .state.pending {
+      background: rgba(180, 83, 9, 0.10);
+      color: var(--warn);
+    }
+
+    .empty {
+      padding: 18px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed rgba(15, 23, 42, 0.14);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.72);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .search {
+      display: flex;
+      gap: 10px;
+      flex: 1;
+      min-width: 240px;
+    }
+
+    .quick {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .tiny {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+      background: #9ca3af;
+    }
+
+    .status-dot.online { background: var(--success); }
+    .status-dot.offline { background: var(--danger); }
+
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .kpi .box {
+      background: linear-gradient(180deg, #fff, #fcfdff);
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .kpi .box .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .kpi .box .value {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(15, 23, 42, 0.08);
+      margin: 14px 0;
+    }
+
+    .calendar-wrap {
+      display: grid;
+      gap: 12px;
+    }
+
+    .calendar-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .range-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .range-controls label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .range-select {
+      min-width: 150px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 14px;
+      padding: 12px 13px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    .range-select:focus {
+      border-color: rgba(37, 99, 235, 0.7);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
+    }
+
+    .range-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .footer {
+      margin-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .member-only {
+      display: none;
+    }
+
+    .member-stat {
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      border-radius: 16px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(37, 99, 235, 0.05), rgba(255, 255, 255, 0.96));
+      margin-bottom: 14px;
+    }
+
+    .member-stat .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .member-stat .value {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--primary-dark);
+    }
+
+    @media (max-width: 1024px) {
+      .grid { grid-template-columns: 1fr; }
+      .kpi { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr 1fr; }
+      .row .span-2 { grid-column: span 2; }
+      .inline-edit { grid-template-columns: 1fr; }
+      .inline-edit-labels { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .wrap { padding: 14px; }
+      .content { padding: 14px; }
+      .topbar { padding: 14px; }
+      .tabs { flex-direction: column; }
+      .tab-btn { text-align: left; }
+      .row { grid-template-columns: 1fr; }
+      .row .span-2 { grid-column: auto; }
+      .search { min-width: 100%; }
+      .toolbar { align-items: stretch; }
+      .meta { width: 100%; justify-content: flex-start; }
+      .buyer-item { align-items: flex-start; flex-direction: column; }
+      .range-controls { align-items: stretch; }
+      .range-select { width: 100%; }
+      .range-fields { grid-template-columns: 1fr; }
+      .inline-edit-labels { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">G</div>
+        <div>
+          <h1 id="familyTitle">Grocery Family</h1>
+          <p id="memberInfo">Loading session...</p>
+        </div>
+      </div>
+
+      <div class="meta">
+        <div class="pill">
+          <span class="status-dot" id="socketDot"></span>
+          <strong id="socketStatus">Offline</strong>
+        </div>
+
+        <div class="date-box">
+          <label for="datePicker">Date</label>
+          <input type="date" id="datePicker" />
+          <span class="badge" id="missedBadge">0</span>
+        </div>
+
+        <div class="pill">
+          Missed: <strong id="missedLabel">0</strong>
+        </div>
+
+        <button class="btn danger small" id="logoutTopBtn">Logout</button>
+      </div>
+    </header>
+
+    <div id="notice" class="notice"></div>
+
+    <section class="panel">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="buyer">Buyer</button>
+        <button class="tab-btn" data-tab="items">Items</button>
+      </div>
+
+      <div class="content">
+        <div class="kpi">
+          <div class="box">
+            <div class="label">Family ID</div>
+            <div class="value" id="kpiFamilyId">-</div>
+          </div>
+          <div class="box">
+            <div class="label">Role</div>
+            <div class="value" id="kpiRole">-</div>
+          </div>
+          <div class="box">
+            <div class="label">Items</div>
+            <div class="value" id="kpiItems">0</div>
+          </div>
+        </div>
+
+        <div id="buyer" class="tab-panel active">
+          <div class="grid">
+            <div class="card">
+              <div class="toolbar">
+                <div>
+                  <h2>Buyer view</h2>
+                  <div class="subtext">Realtime family grocery list. Updates arrive immediately when items are edited.</div>
+                </div>
+                <div class="quick">
+                  <button class="btn secondary small" id="refreshBuyerBtn">Refresh</button>
+                  <button class="btn secondary small" id="markMissingBtn">Check missed</button>
+                </div>
+              </div>
+
+              <div id="buyerList" class="list"></div>
+              <div id="buyerEmpty" class="empty" style="display:none;">No items found for this family.</div>
+            </div>
+            <div class="card">
+              <h3>Selected date</h3>
+              <div class="subtext">Open the calendar and check whether anything was missed on that day.</div>
+              <div class="range-controls">
+                <label for="rangeMode">Range</label>
+                <select id="rangeMode" class="range-select">
+                  <option value="day">Today</option>
+                  <option value="week">Week</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              <div class="range-fields" id="customRangeWrap" style="display:none;">
+                <input type="date" id="rangeStart" />
+                <input type="date" id="rangeEnd" />
+              </div>
+              <div class="calendar-wrap">
+                <div class="calendar-actions">
+                  <button class="btn today" id="todayBtn">Today</button>
+                </div>
+                <div class="divider"></div>
+                <div class="stack">
+                  <div class="item">
+                    <div class="item-head">
+                      <div>
+                        <div class="item-title">Missed purchase summary</div>
+                        <div class="item-meta" id="missedSummary">No date selected.</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="missedList" class="list"></div>
+                  <div id="missedEmpty" class="empty" style="display:none;">No missed purchases for the selected date.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="items" class="tab-panel">
+          <div class="grid">
+            <div class="card">
+              <div class="toolbar">
+                <div>
+                  <h2>Items tab</h2>
+                  <div class="subtext">Add or edit family items. Changes save automatically after typing stops.</div>
+                </div>
+                <div class="quick">
+                  <button class="btn secondary small" id="reloadItemsBtn">Reload</button>
+                </div>
+              </div>
+
+              <div class="row">
+                <input id="newItemName" class="span-2" type="text" placeholder="Item name" />
+                <input id="newItemQty" type="text" placeholder="Qty" />
+                <select id="newItemUnit">
+                  <option value="KG">KG</option>
+                  <option value="LITRE">LITRE</option>
+                  <option value="NOS" selected>NOS</option>
+                </select>
+                <button class="btn input-like" id="addItemBtn">Add item</button>
+              </div>
+
+              <div class="toolbar">
+                <div class="search">
+                  <input id="searchItems" type="text" placeholder="Search items..." />
+                </div>
+                <div class="tiny" id="saveState">Idle</div>
+              </div>
+
+              <div id="itemsList" class="list"></div>
+              <div id="itemsEmpty" class="empty" style="display:none;">No items available. Add the first grocery item above.</div>
+            </div>
+
+            <div class="card">
+              <h3>Member date picker</h3>
+              <div class="subtext">Use this date picker while working in the member page.</div>
+              <div class="member-only member-stat" id="memberItemsStat">
+                <div class="label">Total items</div>
+                <div class="value" id="memberItemsCount">0</div>
+              </div>
+              <div class="full">
+                <input type="date" id="datePickerMirror" />
+              </div>
+              <div class="footer">
+                <button class="btn today" id="todayBtnMember">Today</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+    const API_BASE = "https://grocery-api.sangeeth47.in";
+    // Derive SOCKET_URL from API_BASE (preferred) or fall back to current origin.
+    const SOCKET_URL = (function () {
+      try {
+        if (typeof API_BASE === "string" && API_BASE) {
+          return new URL(API_BASE).origin;
+        }
+      } catch (e) {
+        console.warn("Invalid API_BASE while deriving SOCKET_URL", e);
+      }
+      try {
+        return location.origin || "";
+      } catch (e) {
+        return "";
+      }
+    })();
+    const ENDPOINTS = {
+      me: `${API_BASE}/api/auth/me`,
+      items: `${API_BASE}/api/items`,
+      missed: `${API_BASE}/api/purchases/missed`,
+      purchases: `${API_BASE}/api/purchases`,
+      login: "index.html"
+    };
+
+    const state = {
+      token: localStorage.getItem("gro_token") || "",
+      familyId: localStorage.getItem("gro_familyId") || "",
+      mobile: localStorage.getItem("gro_mobile") || "",
+      userId: localStorage.getItem("gro_userId") || "",
+      familyName: localStorage.getItem("gro_familyName") || "",
+      defaultRole: localStorage.getItem("gro_defaultRole") || "member",
+      defaultTab: localStorage.getItem("gro_defaultTab") || "buyer",
+      roleLabel: "Member",
+      items: [],
+      filteredItems: [],
+      missed: [],
+      selectedDate: new Date().toISOString().slice(0, 10),
+      socket: null,
+      saveTimers: new Map(),
+      connected: false
+    };
+
+    const el = (id) => document.getElementById(id);
+
+    const familyTitle = el("familyTitle");
+    const memberInfo = el("memberInfo");
+    const kpiFamilyId = el("kpiFamilyId");
+    const kpiRoleLabel = document.querySelector(".kpi .box:nth-child(2) .label");
+    const kpiRole = el("kpiRole");
+    const kpiItems = el("kpiItems");
+    const datePicker = el("datePicker");
+    const datePickerMirror = el("datePickerMirror");
+    const missedBadge = el("missedBadge");
+    const missedLabel = el("missedLabel");
+    const missedSummary = el("missedSummary");
+    const missedList = el("missedList");
+    const missedEmpty = el("missedEmpty");
+    const notice = el("notice");
+    const buyerList = el("buyerList");
+    const buyerEmpty = el("buyerEmpty");
+    const itemsList = el("itemsList");
+    const itemsEmpty = el("itemsEmpty");
+    const memberItemsStat = el("memberItemsStat");
+    const memberItemsCount = el("memberItemsCount");
+    const searchItems = el("searchItems");
+    const saveState = el("saveState");
+    const socketDot = el("socketDot");
+    const socketStatus = el("socketStatus");
+
+    state.rangeMode = localStorage.getItem("gro_rangeMode") || "day";
+    state.rangeStart = localStorage.getItem("gro_rangeStart") || state.selectedDate;
+    state.rangeEnd = localStorage.getItem("gro_rangeEnd") || state.selectedDate;
+    const rangeMode = document.createElement("select");
+
+    function showNotice(message, type = "info") {
+      notice.textContent = message;
+      notice.className = `notice show ${type}`;
+      clearTimeout(showNotice._t);
+      showNotice._t = setTimeout(() => {
+        notice.className = "notice";
+        notice.textContent = "";
+      }, 3000);
+    }
+
+    function setSocketStatus(online, message) {
+      state.connected = online;
+      socketDot.className = `status-dot ${online ? "online" : "offline"}`;
+      socketStatus.textContent = online ? "Online" : "Offline";
+    }
+
+    function authHeaders(extra = {}) {
+      return {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${state.token}`,
+        ...extra
+      };
+    }
+
+    function ensureLogin() {
+      if (!state.token) {
+        window.location.href = ENDPOINTS.login;
+        return false;
+      }
+      return true;
+    }
+
+    function renderHeader() {
+      const label = state.defaultRole === "buyer" ? "Buyer" : "Member";
+      state.roleLabel = label;
+      familyTitle.textContent = state.familyName ? `${state.familyName}` : "Grocery Family";
+      memberInfo.textContent = `${state.mobile || "Unknown"} • ${label}`;
+      kpiFamilyId.textContent = state.familyId || "-";
+      datePicker.value = state.selectedDate;
+      datePickerMirror.value = state.selectedDate;
+      if (memberItemsStat) memberItemsStat.style.display = isMemberRole() ? "block" : "none";
+      updateBuyerProgressKpi();
+      updateMemberItemsSummary();
+    }
+
+    function isMemberRole() {
+      return String(state.defaultRole || "").toLowerCase() === "member";
+    }
+
+    function applyRoleTabVisibility() {
+      const buyerTabBtn = document.querySelector('.tab-btn[data-tab="buyer"]');
+      const buyerPanel = el("buyer");
+      const isMember = isMemberRole();
+
+      if (buyerTabBtn) buyerTabBtn.style.display = isMember ? "none" : "";
+      if (buyerPanel) buyerPanel.style.display = isMember ? "none" : "";
+
+      if (isMember) {
+        if (state.defaultTab === "buyer") state.defaultTab = "items";
+        if (localStorage.getItem("gro_defaultTab") === "buyer") {
+          localStorage.setItem("gro_defaultTab", "items");
+        }
+      }
+    }
+
+    function setActiveTab(tab) {
+      if (tab === "buyer" && isMemberRole()) {
+        tab = "items";
+      }
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tab === tab);
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === tab);
+      });
+      localStorage.setItem("gro_defaultTab", tab);
+      updateBuyerProgressKpi();
+    }
+
+    function openDatePicker(input) {
+      if (!input) return;
+      if (typeof input.showPicker === "function") {
+        input.showPicker();
+      } else {
+        input.focus();
+        input.click();
+      }
+    }
+
+    function getSelectedDate() {
+      return datePicker.value || datePickerMirror.value || new Date().toISOString().slice(0, 10);
+    }
+
+function updateSelectedDate(date) {
+  state.selectedDate = date;
+  localStorage.setItem("gro_selectedDate", date);
+  datePicker.value = date;
+  datePickerMirror.value = date;
+
+  syncRangeFromSelectedDate();
+
+  loadItems();
+  loadMissedPurchases();
+}
+
+function toDateInputValue(date) {
+  return String(date).slice(0, 10);
+}
+
+function shiftDate(dateStr, deltaDays) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function syncRangeFromSelectedDate() {
+  const selected = getSelectedDate();
+  if (!selected) return;
+
+  if (state.rangeMode === "day") {
+    state.rangeStart = selected;
+    state.rangeEnd = selected;
+  } else if (state.rangeMode === "week") {
+    state.rangeStart = shiftDate(selected, -6);
+    state.rangeEnd = selected;
+  } else {
+    if (!state.rangeStart) state.rangeStart = selected;
+    if (!state.rangeEnd) state.rangeEnd = selected;
+  }
+
+  const rangeStartInput = el("rangeStart");
+  const rangeEndInput = el("rangeEnd");
+  if (rangeStartInput) rangeStartInput.value = state.rangeStart;
+  if (rangeEndInput) rangeEndInput.value = state.rangeEnd;
+  localStorage.setItem("gro_rangeStart", state.rangeStart);
+  localStorage.setItem("gro_rangeEnd", state.rangeEnd);
+}
+
+function setRangeMode(mode) {
+  state.rangeMode = mode;
+  localStorage.setItem("gro_rangeMode", state.rangeMode);
+
+  const rangeModeInput = el("rangeMode");
+  if (rangeModeInput) rangeModeInput.value = mode;
+
+  const customWrap = el("customRangeWrap");
+  if (customWrap) {
+    customWrap.style.display = state.rangeMode === "custom" ? "grid" : "none";
+  }
+
+  syncRangeFromSelectedDate();
+}
+
+function getMissedRange() {
+  const mode = el("rangeMode").value || "day";
+  const selected = getSelectedDate();
+
+  if (mode === "week") {
+    return {
+      start: shiftDate(selected, -6),
+      end: selected
+    };
+  }
+
+  if (mode === "custom") {
+    const start = el("rangeStart").value || selected;
+    const end = el("rangeEnd").value || selected;
+    return { start, end };
+  }
+
+  return { start: selected, end: selected };
+}
+
+  async function loadPurchasesForDate(date = getSelectedDate()) {
+    if (!state.familyId || !date) return [];
+
+    const data = await request(
+      `${ENDPOINTS.purchases}/by-date?familyId=${encodeURIComponent(state.familyId)}&date=${encodeURIComponent(date)}`,
+      { method: "GET" }
+    );
+
+    return Array.isArray(data?.purchases) ? data.purchases : [];
+  }
+
+async function loadItems() {
+  if (!state.familyId) return;
+  saveState.textContent = "Loading items...";
+
+  try {
+    const date = getSelectedDate();
+    const data = await request(
+      `${ENDPOINTS.items}?familyId=${encodeURIComponent(state.familyId)}&date=${encodeURIComponent(date)}`,
+      { method: "GET" }
+    );
+
+    const list = Array.isArray(data) ? data : (data.items || []);
+    state.items = list.map(normalizeItem);
+    state.filteredItems = [...state.items];
+    filterItems();
+    saveState.textContent = "Loaded";
+  } catch (err) {
+    saveState.textContent = "Load failed";
+    showNotice(err.message || "Could not load items.", "error");
+  }
+}
+
+function bindBuyerEvents() {
+  buyerList.addEventListener("click", async (e) => {
+    const itemEl = e.target.closest(".buyer-item");
+    if (!itemEl) return;
+
+    const itemId = Number(itemEl.dataset.id);
+    if (!itemId) return;
+
+    try {
+      await request(ENDPOINTS.purchases, {
+        method: "POST",
+        body: JSON.stringify({
+          itemId,
+          purchaseDate: getSelectedDate(),
+          status: "done",
+          note: "Purchased by buyer",
+          familyId: state.familyId
+        })
+      });
+
+      await loadItems();
+      await loadMissedPurchases();
+      showNotice("Marked as purchased.", "success");
+    } catch (err) {
+      showNotice(err.message || "Unable to mark as purchased.", "error");
+      await loadItems();
+    }
+  });
+}
+
+
+    async function request(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: authHeaders(options.headers || {})
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await response.json().catch(() => ({}))
+        : await response.text().catch(() => "");
+
+      if (!response.ok) {
+        const msg = data?.message || data?.error || "Request failed";
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    function normalizeItem(item) {
+      return {
+        itemId: item.itemId ?? item.ItemId ?? item.id,
+        itemName: item.itemName ?? item.ItemName ?? "",
+        quantity: item.quantity ?? item.Quantity ?? "",
+        unit: item.unit ?? item.Unit ?? "",
+        itemDate: item.itemDate ?? item.ItemDate ?? item.date ?? "",
+        isActive: item.isActive ?? item.IsActive ?? true,
+        updatedAt: item.updatedAt ?? item.UpdatedAt ?? "",
+        updatedBy: item.updatedBy ?? item.UpdatedBy ?? null,
+        status: item.status ?? item.Status ?? ""
+      };
+    }
+
+    function normalizeDateValue(value) {
+      return String(value || "").slice(0, 10);
+    }
+
+    function getVisibleItems() {
+      const selectedDate = normalizeDateValue(getSelectedDate());
+      return state.filteredItems.filter((item) => normalizeDateValue(item.itemDate) === selectedDate);
+    }
+
+    function getVisibleActiveItems() {
+      return getVisibleItems().filter((item) => item.isActive !== false);
+    }
+
+    function isDateInRange(dateValue, startValue, endValue) {
+      const date = normalizeDateValue(dateValue);
+      const start = normalizeDateValue(startValue);
+      const end = normalizeDateValue(endValue);
+      if (!date || !start || !end) return false;
+      return date >= start && date <= end;
+    }
+
+    function getVisibleBuyerItems() {
+      const mode = el("rangeMode")?.value || state.rangeMode || "day";
+      if (mode === "day") {
+        const selectedDate = normalizeDateValue(getSelectedDate());
+        return state.filteredItems.filter((item) => normalizeDateValue(item.itemDate) === selectedDate && item.isActive !== false);
+      }
+
+      const { start, end } = getMissedRange();
+      return state.filteredItems.filter((item) => isDateInRange(item.itemDate, start, end) && item.isActive !== false);
+    }
+
+    function filterItems() {
+      const q = (searchItems.value || "").trim().toLowerCase();
+      state.filteredItems = !q
+        ? [...state.items]
+        : state.items.filter((item) =>
+            [item.itemName, item.quantity, item.unit]
+              .join(" ")
+              .toLowerCase()
+              .includes(q)
+          );
+      renderBuyerList();
+      renderItemsList();
+      kpiItems.textContent = String(getVisibleItems().length);
+      updateBuyerProgressKpi();
+      updateMemberItemsSummary();
+    }
+
+    function updateMemberItemsSummary() {
+      if (!memberItemsCount) return;
+      const totalItems = getVisibleItems().length;
+      memberItemsCount.textContent = String(totalItems);
+      if (memberItemsStat) {
+        memberItemsStat.style.display = isMemberRole() ? "block" : "none";
+      }
+    }
+
+    function updateBuyerProgressKpi() {
+      const activeTab = document.querySelector(".tab-btn.active")?.dataset.tab || "buyer";
+      const visibleItems = activeTab === "items" ? getVisibleActiveItems() : getVisibleBuyerItems();
+      const pendingCount = visibleItems.filter((item) => item.status !== "done").length;
+      const totalCount = visibleItems.length;
+      const roleLabel = state.roleLabel || (state.defaultRole === "buyer" ? "Buyer" : "Member");
+
+      if (kpiRoleLabel) {
+        kpiRoleLabel.textContent = activeTab === "items" || activeTab === "buyer" ? "Pending" : "Role";
+      }
+
+      if (activeTab === "items" || activeTab === "buyer") {
+        kpiRole.textContent = `${pendingCount} / ${totalCount}`;
+      } else {
+        kpiRole.textContent = roleLabel;
+      }
+    }
+
+    function renderBuyerList() {
+      buyerList.innerHTML = "";
+      const items = getVisibleBuyerItems().filter((x) => x.isActive !== false);
+      const mode = el("rangeMode")?.value || state.rangeMode || "day";
+      const { start, end } = getMissedRange();
+
+      if (!items.length) {
+        buyerEmpty.style.display = "block";
+        buyerEmpty.textContent = mode === "day"
+          ? "No items found for this date."
+          : `No items found from ${start} to ${end}.`;
+        return;
+      }
+
+      buyerEmpty.style.display = "none";
+      items.forEach((item) => {
+        const div = document.createElement("div");
+        div.className = "buyer-item";
+        div.dataset.id = String(item.itemId ?? "");
+        div.dataset.status = String(item.status || "").toLowerCase();
+        div.style.cursor = "pointer";
+        div.innerHTML = `
+          <div>
+            <strong>${escapeHtml(item.itemName || "Unnamed item")}</strong>
+            <span>${escapeHtml(formatItemMeta(item))}</span>
+          </div>
+          <div class="state ${item.status === "done" ? "done" : "pending"}">
+            ${item.status === "done" ? "Purchased" : "Pending"}
+          </div>
+        `;
+        buyerList.appendChild(div);
+      });
+
+      updateBuyerProgressKpi();
+    }
+
+    function renderItemsList() {
+      itemsList.innerHTML = "";
+      const items = getVisibleItems();
+
+      if (!items.length) {
+        itemsEmpty.style.display = "block";
+        itemsEmpty.textContent = "No items available for this date. Add the first grocery item above.";
+        return;
+      }
+
+      itemsEmpty.style.display = "none";
+
+      items.forEach((item) => {
+        const purchased = String(item.status || "").toLowerCase() === "done";
+        const disabled = item.isActive === false;
+        const div = document.createElement("div");
+        div.className = `item${purchased ? " purchased" : ""}${!purchased && disabled ? " disabled" : ""}`;
+        div.innerHTML = `
+          <div class="item-head">
+            <div>
+              <div class="item-title">${escapeHtml(item.itemName || "Unnamed item")}</div>
+              <div class="item-meta">${purchased ? `Purchased at ${escapeHtml(formatDateTime(item.updatedAt))}` : `Updated: ${escapeHtml(formatDateTime(item.updatedAt))}`}</div>
+            </div>
+            <div class="item-actions">
+              <button class="btn secondary small" data-action="toggle" data-id="${item.itemId}" ${purchased ? "disabled" : ""}>${item.isActive === false ? "Enable" : "Disable"}</button>
+              <button class="btn danger small" data-action="delete" data-id="${item.itemId}" ${purchased ? "disabled" : ""}>Delete</button>
+            </div>
+          </div>
+
+          <div class="inline-edit-wrap">
+            <div class="inline-edit-labels">
+              <span>Item</span>
+              <span>QTY</span>
+              <span>Unit</span>
+            </div>
+            <div class="inline-edit">
+              <input type="text" value="${escapeAttr(item.itemName || "")}" data-field="itemName" data-id="${item.itemId}" placeholder="Item" ${purchased ? "disabled" : ""} />
+              <input type="text" value="${escapeAttr(item.quantity || "")}" data-field="quantity" data-id="${item.itemId}" placeholder="Count" ${purchased ? "disabled" : ""} />
+              <select data-field="unit" data-id="${item.itemId}" ${purchased ? "disabled" : ""}>
+                <option value="KG" ${String(item.unit).toUpperCase() === "KG" ? "selected" : ""}>KG</option>
+                <option value="LITRE" ${String(item.unit).toUpperCase() === "LITRE" ? "selected" : ""}>LITRE</option>
+                <option value="NOS" ${!item.unit || String(item.unit).toUpperCase() === "NOS" ? "selected" : ""}>NOS</option>
+              </select>
+            </div>
+          </div>
+        `;
+        itemsList.appendChild(div);
+      });
+    }
+
+    function formatItemMeta(item) {
+      const parts = [];
+      if (item.quantity) parts.push(`Qty: ${item.quantity}`);
+      if (item.unit) parts.push(`Unit: ${item.unit}`);
+      if (item.isActive === false) parts.push("Disabled");
+      return parts.length ? parts.join(" • ") : "No extra details";
+    }
+
+    function formatDateTime(value) {
+      if (!value) return "Unknown";
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return String(value);
+      return d.toLocaleString();
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function escapeAttr(text) {
+      return escapeHtml(text).replaceAll("\n", " ");
+    }
+
+    async function loadItems() {
+      if (!state.familyId) return;
+      saveState.textContent = "Loading items...";
+      try {
+        const data = await request(`${ENDPOINTS.items}?familyId=${encodeURIComponent(state.familyId)}`, { method: "GET" });
+        const list = Array.isArray(data) ? data : (data.items || []);
+        state.items = list.map(normalizeItem);
+        state.filteredItems = [...state.items];
+        filterItems();
+        saveState.textContent = "Loaded";
+      } catch (err) {
+        saveState.textContent = "Load failed";
+        showNotice(err.message || "Could not load items.", "error");
+      }
+    }
+
+async function loadMissedPurchases() {
+  if (!state.familyId) return;
+
+  const { start, end } = getMissedRange();
+  missedSummary.textContent = `Loading missed purchases from ${start} to ${end}...`;
+
+  try {
+    const data = await request(
+      `${API_BASE}/api/purchases/missed-range?familyId=${encodeURIComponent(state.familyId)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+      { method: "GET" }
+    );
+
+    const rows = Array.isArray(data) ? data : (data.items || data.missed || []);
+    state.missed = rows;
+
+    missedBadge.textContent = String(rows.length || 0);
+    missedLabel.textContent = String(rows.length || 0);
+    missedSummary.textContent = rows.length
+      ? `${rows.length} missed purchase${rows.length === 1 ? "" : "s"} from ${start} to ${end}`
+      : `No missed purchases from ${start} to ${end}`;
+
+    renderBuyerList();
+
+    missedList.innerHTML = "";
+    if (!rows.length) {
+      missedEmpty.style.display = "block";
+      return;
+    }
+
+    missedEmpty.style.display = "none";
+    rows.forEach((row) => {
+      const itemName = row.itemName || row.ItemName || row.name || "Unnamed item";
+      const itemDate = row.itemDate || row.ItemDate || "";
+      const planned = row.planned || row.Planned || "";
+      const note = row.note || row.Note || "";
+
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML = `
+        <div class="item-head">
+          <div>
+            <div class="item-title">${escapeHtml(itemName)}</div>
+            <div class="item-meta">
+              ${escapeHtml(itemDate)} ${escapeHtml(planned || note || "Missed item")}
+            </div>
+          </div>
+          <div class="state pending">Missed</div>
+        </div>
+      `;
+      missedList.appendChild(div);
+    });
+  } catch (err) {
+    missedSummary.textContent = "Unable to load missed purchases.";
+    showNotice(err.message || "Could not load missed purchases.", "error");
+  }
+}
+    
+async function addItem() {
+  const name = el("newItemName").value.trim();
+  const qty = el("newItemQty").value.trim();
+  const unit = el("newItemUnit").value.trim();
+
+  if (!name) {
+    showNotice("Item name is required.", "error");
+    return;
+  }
+
+  try {
+    saveState.textContent = "Adding item...";
+    await request(ENDPOINTS.items, {
+      method: "POST",
+      body: JSON.stringify({
+        familyId: state.familyId,
+        itemName: name,
+        quantity: qty,
+        unit,
+        itemDate: getSelectedDate()
+      })
+    });
+
+    el("newItemName").value = "";
+    el("newItemQty").value = "";
+    el("newItemUnit").value = "";
+    await loadItems();
+    notifySocket("items:updated", { familyId: state.familyId });
+    showNotice("Item added.", "success");
+  } catch (err) {
+    showNotice(err.message || "Could not add item.", "error");
+  } finally {
+    saveState.textContent = "Idle";
+  }
+}
+    
+
+    function queueSave(itemId, field, value) {
+      const key = `${itemId}:${field}`;
+      clearTimeout(state.saveTimers.get(key));
+      saveState.textContent = "Typing...";
+      const timer = setTimeout(() => saveItemField(itemId, field, value), 900);
+      state.saveTimers.set(key, timer);
+    }
+
+    async function saveItemField(itemId, field, value) {
+      const item = state.items.find((x) => String(x.itemId) === String(itemId));
+      if (item && String(item.status || "").toLowerCase() === "done") {
+        saveState.textContent = "Locked";
+        showNotice("Purchased items can\'t be edited.", "error");
+        return;
+      }
+
+      try {
+        saveState.textContent = "Saving...";
+        await request(`${ENDPOINTS.items}/${encodeURIComponent(itemId)}`, {
+          method: "PUT",
+          body: JSON.stringify({ field, value, familyId: state.familyId })
+        });
+        saveState.textContent = "Saved";
+        await loadItems();
+        notifySocket("items:updated", { familyId: state.familyId });
+      } catch (err) {
+        showNotice(err.message || "Unable to save item.", "error");
+        saveState.textContent = "Save failed";
+      }
+    }
+
+    async function deleteItem(itemId) {
+      const item = state.items.find((x) => String(x.itemId) === String(itemId));
+      if (item && String(item.status || "").toLowerCase() === "done") {
+        showNotice("Purchased items can\'t be deleted.", "error");
+        return;
+      }
+
+      if (!confirm("Delete this item?")) return;
+      try {
+        await request(`${ENDPOINTS.items}/${encodeURIComponent(itemId)}`, {
+          method: "DELETE",
+          body: JSON.stringify({ familyId: state.familyId })
+        });
+        showNotice("Item deleted.", "success");
+        await loadItems();
+        notifySocket("items:updated", { familyId: state.familyId });
+      } catch (err) {
+        showNotice(err.message || "Unable to delete item.", "error");
+      }
+    }
+
+    async function toggleItemActive(itemId) {
+      const item = state.items.find((x) => String(x.itemId) === String(itemId));
+      if (!item || String(item.status || "").toLowerCase() === "done") return;
+      const next = item.isActive === false ? true : false;
+      await saveItemField(itemId, "isActive", next);
+    }
+
+    function bindItemEvents() {
+      itemsList.addEventListener("input", (e) => {
+        const target = e.target;
+        if (!target.matches("input[data-field]")) return;
+        if (target.closest(".item.purchased")) return;
+        const itemId = target.dataset.id;
+        const field = target.dataset.field;
+        const value = target.value;
+        queueSave(itemId, field, value);
+      });
+
+      itemsList.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const itemId = btn.dataset.id;
+        if (action === "delete") await deleteItem(itemId);
+        if (action === "toggle") await toggleItemActive(itemId);
+      });
+    }
+
+function bindBuyerEvents() {
+  buyerList.addEventListener("click", async (e) => {
+    const itemEl = e.target.closest(".buyer-item");
+    if (!itemEl) return;
+
+    const itemId = Number(itemEl.dataset.id);
+    if (!itemId) return;
+    const currentStatus = String(itemEl.dataset.status || "").toLowerCase();
+    const nextStatus = currentStatus === "done" ? "pending" : "done";
+
+    if (currentStatus === "done" && !confirm("Mark this item as pending again?")) {
+      return;
+    }
+
+    try {
+      await request(ENDPOINTS.purchases, {
+        method: "POST",
+        body: JSON.stringify({
+          itemId,
+          purchaseDate: getSelectedDate(),
+          status: nextStatus,
+          note: nextStatus === "done" ? "Purchased by buyer" : "Marked pending by buyer",
+          familyId: state.familyId
+        })
+      });
+
+      await loadItems();
+      await loadMissedPurchases();
+      showNotice(nextStatus === "done" ? "Marked as purchased." : "Marked as pending.", "success");
+    } catch (err) {
+      showNotice(err.message || "Unable to update item status.", "error");
+      await loadItems();
+    }
+  });
+}
+function notifySocket(type, payload) {
+  if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+    state.socket.send(JSON.stringify({ type, payload }));
+  }
+}
+
+    function setupSocket() {
+  if (!state.token || !state.familyId) {
+    setSocketStatus(false, "Missing token or familyId.");
+    return;
+  }
+
+  const wsUrl = `wss://grocery-api.sangeeth47.in/wss/?token=${encodeURIComponent(state.token)}&familyId=${encodeURIComponent(state.familyId)}`;
+
+  try {
+    state.socket = new WebSocket(wsUrl);
+
+    state.socket.addEventListener("open", () => {
+      setSocketStatus(true, "Realtime connection active.");
+    });
+
+    state.socket.addEventListener("close", () => {
+      setSocketStatus(false, "Realtime connection disconnected.");
+    });
+
+    state.socket.addEventListener("error", () => {
+      setSocketStatus(false, "Connection error.");
+    });
+
+    state.socket.addEventListener("message", async (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (msg.type === "items:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
+        await loadItems();
+        showNotice("Family list updated in realtime.", "info");
+      }
+
+      if (msg.type === "purchase:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
+        await loadMissedPurchases();
+      }
+    });
+  } catch {
+    setSocketStatus(false, "Socket setup failed.");
+  }
+}
+
+    async function loadProfile() {
+      try {
+        const data = await request(ENDPOINTS.me, { method: "GET" });
+        if (data?.familyName) state.familyName = data.familyName;
+        if (data?.familyId) state.familyId = String(data.familyId);
+        if (data?.mobile) state.mobile = String(data.mobile);
+        if (data?.defaultRole) state.defaultRole = data.defaultRole;
+        if (data?.defaultTab) state.defaultTab = data.defaultTab;
+        renderHeader();
+        applyRoleTabVisibility();
+      } catch {
+        renderHeader();
+        applyRoleTabVisibility();
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem("gro_token");
+      localStorage.removeItem("gro_familyId");
+      localStorage.removeItem("gro_mobile");
+      localStorage.removeItem("gro_userId");
+      localStorage.removeItem("gro_familyName");
+      localStorage.removeItem("gro_defaultRole");
+      localStorage.removeItem("gro_defaultTab");
+      window.location.href = ENDPOINTS.login;
+    }
+
+    function wireEvents() {
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+      });
+
+      datePicker.addEventListener("click", () => openDatePicker(datePicker));
+      datePickerMirror.addEventListener("click", () => openDatePicker(datePickerMirror));
+
+      datePicker.addEventListener("change", () => updateSelectedDate(datePicker.value));
+      datePickerMirror.addEventListener("change", () => updateSelectedDate(datePickerMirror.value));
+
+      el("markMissingBtn").addEventListener("click", loadMissedPurchases);
+      el("todayBtn").addEventListener("click", () => {
+        setRangeMode("day");
+        updateSelectedDate(new Date().toISOString().slice(0, 10));
+      });
+      el("todayBtnMember").addEventListener("click", () => {
+        setRangeMode("day");
+        updateSelectedDate(new Date().toISOString().slice(0, 10));
+      });
+
+      el("addItemBtn").addEventListener("click", addItem);
+      el("reloadItemsBtn").addEventListener("click", loadItems);
+      el("refreshBuyerBtn").addEventListener("click", loadItems);
+        el("logoutTopBtn").addEventListener("click", logout);
+      el("rangeMode").addEventListener("change", () => {
+  setRangeMode(el("rangeMode").value);
+
+  loadMissedPurchases();
+});
+
+el("rangeStart").addEventListener("change", () => {
+  state.rangeStart = el("rangeStart").value;
+  localStorage.setItem("gro_rangeStart", state.rangeStart);
+  loadMissedPurchases();
+});
+
+el("rangeEnd").addEventListener("change", () => {
+  state.rangeEnd = el("rangeEnd").value;
+  localStorage.setItem("gro_rangeEnd", state.rangeEnd);
+  loadMissedPurchases();
+});
+      searchItems.addEventListener("input", filterItems);
+
+      bindItemEvents();
+      bindBuyerEvents();
+    }
+
+    async function init() {
+  if (!ensureLogin()) return;
+  wireEvents();
+
+  state.selectedDate = localStorage.getItem("gro_selectedDate") || new Date().toISOString().slice(0, 10);
+  state.rangeMode = localStorage.getItem("gro_rangeMode") || "day";
+  state.rangeStart = localStorage.getItem("gro_rangeStart") || state.selectedDate;
+  state.rangeEnd = localStorage.getItem("gro_rangeEnd") || state.selectedDate;
+
+  renderHeader();
+  applyRoleTabVisibility();
+  setActiveTab(localStorage.getItem("gro_defaultTab") || state.defaultTab || "buyer");
+  updateSelectedDate(state.selectedDate);
+
+  setRangeMode(state.rangeMode);
+
+  await loadProfile();
+  await loadItems();
+  await loadMissedPurchases();
+  setupSocket();
+}
+
+    datePicker.addEventListener("change", () => {
+      localStorage.setItem("gro_selectedDate", datePicker.value);
+    });
+
+    datePickerMirror.addEventListener("change", () => {
+      localStorage.setItem("gro_selectedDate", datePickerMirror.value);
+    });
+
+    window.addEventListener("beforeunload", () => {
+      localStorage.setItem("gro_selectedDate", getSelectedDate());
+      if (state.socket && typeof state.socket.disconnect === "function") {
+        state.socket.disconnect();
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

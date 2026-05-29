@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grocery Family Login</title>
+  <style>
+    :root {
+      --bg1: #eef4ff;
+      --bg2: #f8fbff;
+      --card: rgba(255, 255, 255, 0.92);
+      --border: rgba(15, 23, 42, 0.10);
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --shadow: 0 20px 60px rgba(37, 99, 235, 0.10);
+      --radius: 22px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.12), transparent 24%),
+        linear-gradient(180deg, var(--bg1), var(--bg2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 980px;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .hero,
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: 34px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      position: relative;
+      min-height: 620px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--primary), #60a5fa);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 20px;
+      box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
+      flex: 0 0 auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .hero h2 {
+      margin: 12px 0 10px;
+      font-size: 42px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      max-width: 12ch;
+    }
+
+    .hero .desc {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 52ch;
+    }
+
+    .features {
+      margin-top: 30px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .feature {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 14px 16px;
+      border: 1px solid rgba(37, 99, 235, 0.10);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.65);
+    }
+
+    .feature .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      margin-top: 5px;
+      background: var(--primary);
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.10);
+    }
+
+    .feature strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 15px;
+    }
+
+    .feature span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .hero-footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .card {
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.15;
+    }
+
+    .card .sub {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .alert {
+      display: none;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.45;
+      border: 1px solid transparent;
+    }
+
+    .alert.show {
+      display: block;
+    }
+
+    .alert.error {
+      background: rgba(220, 38, 38, 0.08);
+      color: var(--danger);
+      border-color: rgba(220, 38, 38, 0.18);
+    }
+
+    .alert.success {
+      background: rgba(22, 163, 74, 0.08);
+      color: var(--success);
+      border-color: rgba(22, 163, 74, 0.18);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .hint {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    input[type="text"],
+    input[type="tel"],
+    input[type="password"] {
+      width: 100%;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      background: #fff;
+      color: var(--text);
+      border-radius: 14px;
+      padding: 14px 15px;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus {
+      border-color: rgba(37, 99, 235, 0.7);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    }
+
+    .input-row {
+      position: relative;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 10px;
+    }
+
+    .toggle-password:hover {
+      background: rgba(100, 116, 139, 0.10);
+    }
+
+    .roles {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .role {
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 16px;
+      padding: 14px 14px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s;
+      background: #fff;
+    }
+
+    .role:hover {
+      border-color: rgba(37, 99, 235, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .role input {
+      margin-top: 3px;
+      accent-color: var(--primary);
+      flex: 0 0 auto;
+    }
+
+    .role strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .role span {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .role.active {
+      border-color: rgba(37, 99, 235, 0.55);
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .row-flex {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 4px 0 18px;
+      flex-wrap: wrap;
+    }
+
+    .checkbox-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .checkbox-wrap input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    .small-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .small-link:hover {
+      color: var(--primary-dark);
+    }
+
+    .btn {
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, var(--primary), #4f83f1);
+      color: #fff;
+      box-shadow: 0 12px 22px rgba(37, 99, 235, 0.22);
+    }
+
+    .btn.primary:hover {
+      background: linear-gradient(135deg, var(--primary-dark), #396ee6);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary:disabled {
+      opacity: 0.72;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .footer-note {
+      margin-top: 18px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .footer-note strong {
+      color: var(--text);
+    }
+
+    @media (max-width: 900px) {
+      .wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+        padding: 24px;
+      }
+
+      .hero h2 {
+        font-size: 34px;
+        max-width: none;
+      }
+
+      .card {
+        padding: 24px;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .roles {
+        grid-template-columns: 1fr;
+      }
+
+      .hero h2 {
+        font-size: 30px;
+      }
+
+      .card h3 {
+        font-size: 24px;
+      }
+
+      .row-flex {
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <div class="brand">
+          <div class="logo">G</div>
+          <div>
+            <h1>Grocery Family Share</h1>
+            <p>Family login, items sync, buyer view</p>
+          </div>
+        </div>
+
+        <h2>One shared list for the whole family</h2>
+        <p class="desc">
+          Sign in with mobile number and secret. First-time users can be created automatically by the backend.
+          Your last selected tab is remembered for the next login.
+        </p>
+
+        <div class="features">
+          <div class="feature">
+            <div class="dot"></div>
+            <div>
+              <strong>Buyer tab</strong>
+              <span>See current items immediately after login and receive realtime updates.</span>
+            </div>
+          </div>
+
+          <div class="feature">
+            <div class="dot"></div>
+            <div>
+              <strong>Items tab</strong>
+              <span>Add or update grocery items and sync changes to the database after typing stops.</span>
+            </div>
+          </div>
+
+          <div class="feature">
+            <div class="dot"></div>
+            <div>
+              <strong>Missed purchase calendar</strong>
+              <span>Select a date after login to check if any purchase was missed.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-footer">
+        Secure login with JWT. Realtime updates handled through your websocket service behind Nginx.
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Login</h3>
+      <p class="sub">Enter your family ID, mobile number, and secret to continue.</p>
+
+      <div id="alertBox" class="alert"></div>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="form-group">
+          <label for="familyId">Family ID</label>
+          <input type="text" id="familyId" name="familyId" placeholder="Enter family ID" required />
+          <span class="hint">Example: FAM1001 or your backend family code.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="mobile">Mobile Number</label>
+          <input type="tel" id="mobile" name="mobile" placeholder="Enter mobile number" required />
+          <span class="hint">Used for first login user creation and future login.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="secret">Secret</label>
+          <div class="input-row">
+            <input type="password" id="secret" name="secret" placeholder="Enter secret" required />
+            <button type="button" class="toggle-password" id="togglePassword">Show</button>
+          </div>
+          <span class="hint">This will be stored securely by backend hashing. Never store plain text.</span>
+        </div>
+
+        <div class="form-group">
+          <label>Login as</label>
+          <div class="roles" id="roleOptions">
+            <label class="role" for="roleBuyer">
+              <input type="radio" id="roleBuyer" name="role" value="buyer" checked />
+              <div>
+                <strong>Buyer</strong>
+                <span>Opens buyer tab after login.</span>
+              </div>
+            </label>
+
+            <label class="role" for="roleMember">
+              <input type="radio" id="roleMember" name="role" value="member" />
+              <div>
+                <strong>Family Member</strong>
+                <span>Opens items tab after login.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="row-flex">
+          <label class="checkbox-wrap">
+            <input type="checkbox" id="rememberMe" checked />
+            Remember login on this device
+          </label>
+
+          <a class="small-link" href="#" id="forgotLink">Need help?</a>
+        </div>
+
+        <button type="submit" class="btn primary" id="loginBtn">Login</button>
+
+        <div class="footer-note">
+          First-time login will create the user at the backend using the entered mobile number and secret.
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE = "https://grocery-api.sangeeth47.in"; 
+    const LOGIN_ENDPOINT = `${API_BASE}/api/auth/login`;
+
+    const form = document.getElementById("loginForm");
+    const alertBox = document.getElementById("alertBox");
+    const loginBtn = document.getElementById("loginBtn");
+    const togglePassword = document.getElementById("togglePassword");
+    const secretInput = document.getElementById("secret");
+    const roleOptions = document.getElementById("roleOptions");
+
+    const familyIdInput = document.getElementById("familyId");
+    const mobileInput = document.getElementById("mobile");
+    const rememberMe = document.getElementById("rememberMe");
+
+    const roleBuyer = document.getElementById("roleBuyer");
+    const roleMember = document.getElementById("roleMember");
+
+    function showAlert(message, type = "error") {
+      alertBox.textContent = message;
+      alertBox.className = `alert show ${type}`;
+    }
+
+    function clearAlert() {
+      alertBox.textContent = "";
+      alertBox.className = "alert";
+    }
+
+    function setLoading(isLoading) {
+      loginBtn.disabled = isLoading;
+      loginBtn.textContent = isLoading ? "Logging in..." : "Login";
+      familyIdInput.disabled = isLoading;
+      mobileInput.disabled = isLoading;
+      secretInput.disabled = isLoading;
+      rememberMe.disabled = isLoading;
+      roleBuyer.disabled = isLoading;
+      roleMember.disabled = isLoading;
+    }
+
+    function getSelectedRole() {
+      return document.querySelector('input[name="role"]:checked')?.value || "buyer";
+    }
+
+    function updateRoleStyles() {
+      document.querySelectorAll(".role").forEach((label) => {
+        const input = label.querySelector("input[type='radio']");
+        label.classList.toggle("active", input.checked);
+      });
+    }
+
+    function rememberFormState() {
+      localStorage.setItem("gro_login_familyId", familyIdInput.value.trim());
+      localStorage.setItem("gro_login_mobile", mobileInput.value.trim());
+      localStorage.setItem("gro_login_role", getSelectedRole());
+      localStorage.setItem("gro_login_remember", rememberMe.checked ? "1" : "0");
+    }
+
+    function loadFormState() {
+      const savedFamilyId = localStorage.getItem("gro_login_familyId") || "";
+      const savedMobile = localStorage.getItem("gro_login_mobile") || "";
+      const savedRole = localStorage.getItem("gro_login_role") || "buyer";
+      const savedRemember = localStorage.getItem("gro_login_remember");
+
+      familyIdInput.value = savedFamilyId;
+      mobileInput.value = savedMobile;
+
+      if (savedRole === "member") {
+        roleMember.checked = true;
+      } else {
+        roleBuyer.checked = true;
+      }
+
+      if (savedRemember !== null) {
+        rememberMe.checked = savedRemember === "1";
+      }
+
+      updateRoleStyles();
+    }
+
+    togglePassword.addEventListener("click", () => {
+      const isHidden = secretInput.type === "password";
+      secretInput.type = isHidden ? "text" : "password";
+      togglePassword.textContent = isHidden ? "Hide" : "Show";
+    });
+
+    roleOptions.addEventListener("change", () => {
+      updateRoleStyles();
+      rememberFormState();
+    });
+
+    [familyIdInput, mobileInput, rememberMe].forEach((el) => {
+      el.addEventListener("input", rememberFormState);
+      el.addEventListener("change", rememberFormState);
+    });
+
+    document.getElementById("forgotLink").addEventListener("click", (e) => {
+      e.preventDefault();
+      showAlert("Contact the family admin or backend support to reset the secret.", "success");
+    });
+
+    loadFormState();
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearAlert();
+
+      const familyId = familyIdInput.value.trim();
+      const mobile = mobileInput.value.trim();
+      const secret = secretInput.value;
+      const role = getSelectedRole();
+      const remember = rememberMe.checked;
+
+      if (!familyId || !mobile || !secret) {
+        showAlert("Family ID, mobile number, and secret are required.");
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await fetch(LOGIN_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            familyId,
+            mobile,
+            secret,
+            role,
+            remember
+          })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.message || "Login failed.");
+        }
+
+        const token = data.token || data.accessToken || "";
+        const user = data.user || {};
+        // Always honor the role selected on the login form for initial tab.
+        const defaultTab = role === "member" ? "items" : "buyer";
+
+        if (token) localStorage.setItem("gro_token", token);
+        localStorage.setItem("gro_familyId", data.familyId || familyId);
+        localStorage.setItem("gro_mobile", data.mobile || mobile);
+        localStorage.setItem("gro_defaultTab", defaultTab);
+        localStorage.setItem("gro_defaultRole", role);
+
+        if (data.userId) localStorage.setItem("gro_userId", String(data.userId));
+        if (user.userId) localStorage.setItem("gro_userId", String(user.userId));
+        if (data.familyName) localStorage.setItem("gro_familyName", data.familyName);
+        if (user.familyName) localStorage.setItem("gro_familyName", user.familyName);
+
+        rememberFormState();
+
+        const redirectUrl = data.redirectUrl || "app.html";
+        window.location.href = redirectUrl;
+      } catch (err) {
+        showAlert(err.message || "Unable to login.");
+      } finally {
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
+</html>
