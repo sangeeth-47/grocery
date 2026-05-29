@@ -820,7 +820,6 @@
                 </div>
                 <div class="quick">
                   <button class="btn secondary small" id="refreshBuyerBtn">Refresh</button>
-                  <button class="btn secondary small" id="markMissingBtn">Check missed</button>
                 </div>
               </div>
 
@@ -1766,7 +1765,7 @@ function notifySocket(type, payload) {
       datePicker.addEventListener("change", () => updateSelectedDate(datePicker.value));
       datePickerMirror.addEventListener("change", () => updateSelectedDate(datePickerMirror.value));
 
-      el("markMissingBtn").addEventListener("click", loadMissedPurchases);
+      
       el("todayBtn").addEventListener("click", () => {
         setRangeMode("day");
         updateSelectedDate(new Date().toISOString().slice(0, 10));
