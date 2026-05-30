@@ -540,6 +540,46 @@
       white-space: nowrap;
     }
 
+    .inline-confirm {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      background: rgba(37, 99, 235, 0.06);
+    }
+
+    .inline-confirm .prompt {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+
+    .inline-confirm-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .inline-confirm-actions .btn {
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    .inline-confirm-actions .btn.yes {
+      background: linear-gradient(135deg, #16a34a, #22c55e);
+      color: #fff;
+    }
+
+    .inline-confirm-actions .btn.no {
+      background: rgba(15, 23, 42, 0.06);
+      color: var(--text);
+    }
+
     .state.done {
       background: rgba(22, 163, 74, 0.10);
       color: var(--success);
@@ -942,23 +982,416 @@
       login: "index.html"
     };
 
-    const state = {
-      token: localStorage.getItem("gro_token") || "",
-      familyId: localStorage.getItem("gro_familyId") || "",
-      mobile: localStorage.getItem("gro_mobile") || "",
-      userId: localStorage.getItem("gro_userId") || "",
-      familyName: localStorage.getItem("gro_familyName") || "",
-      defaultRole: localStorage.getItem("gro_defaultRole") || "member",
-      defaultTab: localStorage.getItem("gro_defaultTab") || "buyer",
-      roleLabel: "Member",
-      items: [],
-      filteredItems: [],
-      missed: [],
-      selectedDate: getTodayDate(),
-      socket: null,
-      saveTimers: new Map(),
-      connected: false
-    };
+//Socket Configuration and helper functions
+
+const state = {
+  token: localStorage.getItem("gro_token") || "",
+  familyId: localStorage.getItem("gro_familyId") || "",
+  mobile: localStorage.getItem("gro_mobile") || "",
+  userId: localStorage.getItem("gro_userId") || "",
+  familyName: localStorage.getItem("gro_familyName") || "",
+  defaultRole: localStorage.getItem("gro_defaultRole") || "member",
+  defaultTab: localStorage.getItem("gro_defaultTab") || "buyer",
+  roleLabel: "Member",
+  items: [],
+  filteredItems: [],
+  missed: [],
+  selectedDate: getTodayDate(),
+  buyerPendingConfirmItemId: null,
+  socket: null,
+  socketReadyPromise: null,
+  pendingSocketRequests: new Map(),
+  saveTimers: new Map(),
+  connected: false
+};
+
+function makeRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function rejectAllPendingSocketRequests(error) {
+  for (const [requestId, pending] of state.pendingSocketRequests.entries()) {
+    clearTimeout(pending.timer);
+    pending.reject(error);
+    state.pendingSocketRequests.delete(requestId);
+  }
+}
+
+function ensureSocketConnected() {
+  if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+    return Promise.resolve();
+  }
+
+  if (state.socketReadyPromise) {
+    return state.socketReadyPromise;
+  }
+
+  setupSocket();
+  return state.socketReadyPromise || Promise.reject(new Error("Socket could not be initialized."));
+}
+
+function sendSocketRequest(type, payload, timeoutMs = 15000) {
+  return ensureSocketConnected().then(() => {
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+      throw new Error("Realtime connection is not ready.");
+    }
+
+    const requestId = makeRequestId();
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        state.pendingSocketRequests.delete(requestId);
+        reject(new Error("Realtime request timed out."));
+      }, timeoutMs);
+
+      state.pendingSocketRequests.set(requestId, {
+        resolve: (data) => {
+          clearTimeout(timer);
+          resolve(data);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+        timer
+      });
+
+      state.socket.send(JSON.stringify({ type, requestId, payload }));
+    });
+  });
+}
+
+
+//All Socket Function Requests
+
+async function loadItems() {
+  if (!state.familyId) return;
+  saveState.textContent = "Loading items...";
+
+  try {
+    const mode = el("rangeMode")?.value || state.rangeMode || "day";
+    const { start, end } = getMissedRange();
+    const dates = mode === "day" ? [getSelectedDate()] : getDateRangeDates(start, end);
+
+    const payload = await sendSocketRequest("items:get", {
+      familyId: Number(state.familyId),
+      dates
+    });
+
+    const list = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : [];
+    state.items = list.map(normalizeItem);
+    state.filteredItems = [...state.items];
+    filterItems();
+    saveState.textContent = "Loaded";
+  } catch (err) {
+    saveState.textContent = "Load failed";
+    showNotice(err.message || "Could not load items.", "error");
+  }
+}
+
+async function loadMissedPurchases() {
+  if (!state.familyId) return;
+
+  const { start, end } = getMissedRange();
+  missedSummary.textContent = `Loading missed purchases from ${start} to ${end}...`;
+
+  try {
+    const payload = await sendSocketRequest("missed-range:get", {
+      familyId: Number(state.familyId),
+      start,
+      end
+    });
+
+    const rows = Array.isArray(payload?.missed)
+      ? payload.missed
+      : Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload)
+          ? payload
+          : [];
+
+    state.missed = rows;
+
+    missedBadge.textContent = String(rows.length || 0);
+    missedLabel.textContent = String(rows.length || 0);
+    missedSummary.textContent = rows.length
+      ? `${rows.length} missed purchase${rows.length === 1 ? "" : "s"} from ${start} to ${end}`
+      : `No missed purchases from ${start} to ${end}`;
+
+    renderBuyerList();
+
+    missedList.innerHTML = "";
+    if (!rows.length) {
+      missedEmpty.style.display = "block";
+      return;
+    }
+
+    missedEmpty.style.display = "none";
+    rows.forEach((row) => {
+      const itemName = row.itemName || row.ItemName || row.name || "Unnamed item";
+      const itemDate = row.itemDate || row.ItemDate || "";
+      const planned = row.planned || row.Planned || "";
+      const note = row.note || row.Note || "";
+
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML = `
+        <div class="item-head">
+          <div>
+            <div class="item-title">${escapeHtml(itemName)}</div>
+            <div class="item-meta">
+              ${escapeHtml(formatDateShort(itemDate))} ${escapeHtml(planned || note || "Missed item")}
+            </div>
+          </div>
+          <div class="state pending">Missed</div>
+        </div>
+      `;
+      missedList.appendChild(div);
+    });
+  } catch (err) {
+    missedSummary.textContent = "Unable to load missed purchases.";
+    showNotice(err.message || "Could not load missed purchases.", "error");
+  }
+}
+
+async function addItem() {
+  const name = el("newItemName").value.trim();
+  const qty = el("newItemQty").value.trim();
+  const unit = el("newItemUnit").value.trim();
+
+  if (!name) {
+    showNotice("Item name is required.", "error");
+    return;
+  }
+
+  try {
+    saveState.textContent = "Adding item...";
+
+    await sendSocketRequest("item:add", {
+      familyId: Number(state.familyId),
+      itemName: name,
+      quantity: qty,
+      unit,
+      itemDate: getSelectedDate()
+    });
+
+    el("newItemName").value = "";
+    el("newItemQty").value = "";
+    el("newItemUnit").value = "";
+
+    await loadItems();
+    showNotice("Item added.", "success");
+  } catch (err) {
+    showNotice(err.message || "Could not add item.", "error");
+  } finally {
+    saveState.textContent = "Idle";
+  }
+}
+
+async function saveItemField(itemId, field, value) {
+  const item = state.items.find((x) => String(x.itemId) === String(itemId));
+  if (item && String(item.status || "").toLowerCase() === "done") {
+    saveState.textContent = "Locked";
+    showNotice("Purchased items can't be edited.", "error");
+    return;
+  }
+
+  try {
+    saveState.textContent = "Saving...";
+
+    await sendSocketRequest("item:update", {
+      familyId: Number(state.familyId),
+      itemId: Number(itemId),
+      field,
+      value
+    });
+
+    saveState.textContent = "Saved";
+    await loadItems();
+  } catch (err) {
+    showNotice(err.message || "Unable to save item.", "error");
+    saveState.textContent = "Save failed";
+  }
+}
+
+async function deleteItem(itemId) {
+  const item = state.items.find((x) => String(x.itemId) === String(itemId));
+  if (item && String(item.status || "").toLowerCase() === "done") {
+    showNotice("Purchased items can't be deleted.", "error");
+    return;
+  }
+
+  if (!confirm("Delete this item?")) return;
+
+  try {
+    await sendSocketRequest("item:delete", {
+      familyId: Number(state.familyId),
+      itemId: Number(itemId)
+    });
+
+    showNotice("Item deleted.", "success");
+    await loadItems();
+  } catch (err) {
+    showNotice(err.message || "Unable to delete item.", "error");
+  }
+}
+
+function bindBuyerEvents() {
+  buyerList.addEventListener("click", async (e) => {
+        const actionButton = e.target.closest("button[data-action]");
+        if (actionButton) {
+          const action = actionButton.dataset.action;
+          const itemId = Number(actionButton.dataset.id);
+          if (!itemId) return;
+
+          if (action === "cancel-pending") {
+            state.buyerPendingConfirmItemId = null;
+            renderBuyerList();
+            return;
+          }
+
+          if (action === "confirm-pending") {
+            state.buyerPendingConfirmItemId = null;
+
+            try {
+              await sendSocketRequest("purchase:addOrToggle", {
+                familyId: Number(state.familyId),
+                itemId,
+                status: "pending",
+                note: "Marked pending by buyer"
+              });
+
+              await Promise.all([loadItems(), loadMissedPurchases()]);
+              showNotice("Marked as pending.", "success");
+            } catch (err) {
+              showNotice(err.message || "Unable to update item status.", "error");
+              await loadItems();
+            }
+
+            return;
+          }
+        }
+
+        const itemEl = e.target.closest(".buyer-item");
+        if (!itemEl) return;
+
+    const itemId = Number(itemEl.dataset.id);
+    if (!itemId) return;
+
+    const currentStatus = String(itemEl.dataset.status || "").toLowerCase();
+
+        if (currentStatus === "done") {
+          state.buyerPendingConfirmItemId = itemId;
+          renderBuyerList();
+          return;
+        }
+
+        const nextStatus = "done";
+
+    try {
+      await sendSocketRequest("purchase:addOrToggle", {
+        familyId: Number(state.familyId),
+        itemId,
+        status: nextStatus,
+        note: nextStatus === "done" ? "Purchased by buyer" : "Marked pending by buyer"
+      });
+
+      await loadItems();
+      await loadMissedPurchases();
+      showNotice(nextStatus === "done" ? "Marked as purchased." : "Marked as pending.", "success");
+    } catch (err) {
+      showNotice(err.message || "Unable to update item status.", "error");
+      await loadItems();
+    }
+  });
+}
+
+function setupSocket() {
+  if (!state.token || !state.familyId) {
+    setSocketStatus(false, "Missing token or familyId.");
+    state.socketReadyPromise = Promise.reject(new Error("Missing token or familyId."));
+    return;
+  }
+
+  const wsUrl = `wss://grocery-api.sangeeth47.in/wss/?token=${encodeURIComponent(state.token)}&familyId=${encodeURIComponent(state.familyId)}`;
+
+  try {
+    if (state.socket && (state.socket.readyState === WebSocket.OPEN || state.socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    state.socketReadyPromise = new Promise((resolve, reject) => {
+      let opened = false;
+
+      state.socket = new WebSocket(wsUrl);
+
+      state.socket.addEventListener("open", () => {
+        opened = true;
+        setSocketStatus(true, "Realtime connection active.");
+        resolve();
+      });
+
+      state.socket.addEventListener("close", () => {
+        setSocketStatus(false, "Realtime connection disconnected.");
+        rejectAllPendingSocketRequests(new Error("Socket closed."));
+        if (!opened) {
+          reject(new Error("Socket connection failed."));
+        }
+      });
+
+      state.socket.addEventListener("error", () => {
+        setSocketStatus(false, "Connection error.");
+        rejectAllPendingSocketRequests(new Error("Socket error."));
+        if (!opened) {
+          reject(new Error("Socket connection failed."));
+        }
+      });
+
+      state.socket.addEventListener("message", async (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+
+        if (msg.requestId && state.pendingSocketRequests?.has(msg.requestId)) {
+          const pending = state.pendingSocketRequests.get(msg.requestId);
+          state.pendingSocketRequests.delete(msg.requestId);
+
+          if (msg.type === "error") {
+            pending.reject(new Error(msg.payload?.message || "Request failed"));
+          } else {
+            pending.resolve(msg.payload);
+          }
+          return;
+        }
+
+        if (msg.type === "items:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
+          await loadItems();
+          showNotice("Family list updated in realtime.", "info");
+          return;
+        }
+
+        if (msg.type === "purchase:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
+          await Promise.all([
+            loadItems(),
+            loadMissedPurchases()
+          ]);
+          return;
+        }
+      });
+    });
+  } catch {
+    setSocketStatus(false, "Socket setup failed.");
+    state.socketReadyPromise = Promise.reject(new Error("Socket setup failed."));
+  }
+}
+
+
 
     const el = (id) => document.getElementById(id);
 
@@ -1254,69 +1687,6 @@ function getMissedRange() {
     return Array.isArray(data?.purchases) ? data.purchases : [];
   }
 
-async function loadItems() {
-  if (!state.familyId) return;
-  saveState.textContent = "Loading items...";
-
-  try {
-    const mode = el("rangeMode")?.value || state.rangeMode || "day";
-    const { start, end } = getMissedRange();
-    const dates = mode === "day" ? [getSelectedDate()] : getDateRangeDates(start, end);
-
-    const responses = await Promise.all(
-      dates.map((date) => request(
-        `${ENDPOINTS.items}?familyId=${encodeURIComponent(state.familyId)}&date=${encodeURIComponent(date)}`,
-        { method: "GET" }
-      ))
-    );
-
-    const list = responses.flatMap((data) => Array.isArray(data) ? data : (data.items || []));
-    state.items = list.map(normalizeItem);
-    state.filteredItems = [...state.items];
-    filterItems();
-    saveState.textContent = "Loaded";
-  } catch (err) {
-    saveState.textContent = "Load failed";
-    showNotice(err.message || "Could not load items.", "error");
-  }
-}
-
-function bindBuyerEvents() {
-  buyerList.addEventListener("click", async (e) => {
-    const itemEl = e.target.closest(".buyer-item");
-    if (!itemEl) return;
-
-    const itemId = Number(itemEl.dataset.id);
-    if (!itemId) return;
-
-    const currentStatus = String(itemEl.dataset.status || "").toLowerCase();
-    const nextStatus = currentStatus === "done" ? "pending" : "done";
-
-    if (currentStatus === "done" && !confirm("Mark this item as pending again?")) {
-      return;
-    }
-
-    try {
-        await request(ENDPOINTS.purchases, {
-          method: "POST",
-          body: JSON.stringify({
-            itemId,
-            status: nextStatus,
-            note: nextStatus === "done" ? "Purchased by buyer" : "Marked pending by buyer",
-            familyId: state.familyId
-          })
-        });
-
-      await loadItems();
-      await loadMissedPurchases();
-      showNotice(nextStatus === "done" ? "Marked as purchased." : "Marked as pending.", "success");
-    } catch (err) {
-      showNotice(err.message || "Unable to update item status.", "error");
-      await loadItems();
-    }
-  });
-}
-
     async function request(url, options = {}) {
       const response = await fetch(url, {
         ...options,
@@ -1446,14 +1816,30 @@ function bindBuyerEvents() {
         div.dataset.id = String(item.itemId ?? "");
         div.dataset.status = String(item.status || "").toLowerCase();
         div.style.cursor = "pointer";
-        const buyerMeta = item.updatedAt ? `Updated: ${formatDateTime(item.updatedAt)}` : formatItemMeta(item);
+        const buyerMetaParts = [];
+        if (item.quantity) buyerMetaParts.push(`Qty: ${item.quantity}`);
+        if (item.unit) buyerMetaParts.push(`Unit: ${item.unit}`);
+        if (item.updatedAt) buyerMetaParts.push(`Updated: ${formatDateTime(item.updatedAt)}`);
+        const buyerMeta = buyerMetaParts.length ? buyerMetaParts.join(" • ") : "No extra details";
+        const showInlinePrompt = String(state.buyerPendingConfirmItemId) === String(item.itemId) && String(item.status || "").toLowerCase() === "done";
         div.innerHTML = `
           <div>
             <strong>${escapeHtml(item.itemName || "Unnamed item")}</strong>
             <span>${escapeHtml(buyerMeta)}</span>
           </div>
-          <div class="state ${item.status === "done" ? "done" : "pending"}">
-            ${item.status === "done" ? "Purchased" : "Pending"}
+          <div style="display:grid; gap:8px; justify-items:end;">
+            <div class="state ${item.status === "done" ? "done" : "pending"}">
+              ${item.status === "done" ? "Purchased" : "Pending"}
+            </div>
+            ${showInlinePrompt ? `
+              <div class="inline-confirm">
+                <div class="prompt">Move this item back to pending?</div>
+                <div class="inline-confirm-actions">
+                  <button class="btn yes" type="button" data-action="confirm-pending" data-id="${item.itemId}">Yes</button>
+                  <button class="btn no" type="button" data-action="cancel-pending" data-id="${item.itemId}">No</button>
+                </div>
+              </div>
+            ` : ""}
           </div>
         `;
         buyerList.appendChild(div);
@@ -1553,153 +1939,13 @@ function bindBuyerEvents() {
     function escapeAttr(text) {
       return escapeHtml(text).replaceAll("\n", " ");
     }
-
-
-async function loadMissedPurchases() {
-  if (!state.familyId) return;
-
-  const { start, end } = getMissedRange();
-  missedSummary.textContent = `Loading missed purchases from ${start} to ${end}...`;
-
-  try {
-    const data = await request(
-      `${API_BASE}/api/purchases/missed-range?familyId=${encodeURIComponent(state.familyId)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
-      { method: "GET" }
-    );
-
-    const rows = Array.isArray(data) ? data : (data.items || data.missed || []);
-    state.missed = rows;
-
-    missedBadge.textContent = String(rows.length || 0);
-    missedLabel.textContent = String(rows.length || 0);
-    missedSummary.textContent = rows.length
-      ? `${rows.length} missed purchase${rows.length === 1 ? "" : "s"} from ${start} to ${end}`
-      : `No missed purchases from ${start} to ${end}`;
-
-    renderBuyerList();
-
-    missedList.innerHTML = "";
-    if (!rows.length) {
-      missedEmpty.style.display = "block";
-      return;
-    }
-
-    missedEmpty.style.display = "none";
-    rows.forEach((row) => {
-      const itemName = row.itemName || row.ItemName || row.name || "Unnamed item";
-      const itemDate = row.itemDate || row.ItemDate || "";
-      const planned = row.planned || row.Planned || "";
-      const note = row.note || row.Note || "";
-
-      const div = document.createElement("div");
-      div.className = "item";
-      div.innerHTML = `
-        <div class="item-head">
-          <div>
-            <div class="item-title">${escapeHtml(itemName)}</div>
-            <div class="item-meta">
-              ${escapeHtml(formatDateShort(itemDate))} ${escapeHtml(planned || note || "Missed item")}
-            </div>
-          </div>
-          <div class="state pending">Missed</div>
-        </div>
-      `;
-      missedList.appendChild(div);
-    });
-  } catch (err) {
-    missedSummary.textContent = "Unable to load missed purchases.";
-    showNotice(err.message || "Could not load missed purchases.", "error");
-  }
-}
-    
-async function addItem() {
-  const name = el("newItemName").value.trim();
-  const qty = el("newItemQty").value.trim();
-  const unit = el("newItemUnit").value.trim();
-
-  if (!name) {
-    showNotice("Item name is required.", "error");
-    return;
-  }
-
-  try {
-    saveState.textContent = "Adding item...";
-    await request(ENDPOINTS.items, {
-      method: "POST",
-      body: JSON.stringify({
-        familyId: state.familyId,
-        itemName: name,
-        quantity: qty,
-        unit,
-        itemDate: getSelectedDate()
-      })
-    });
-
-    el("newItemName").value = "";
-    el("newItemQty").value = "";
-    el("newItemUnit").value = "";
-
-    await loadItems();
-    notifySocket("items:updated", { familyId: state.familyId });
-    showNotice("Item added.", "success");
-  } catch (err) {
-    showNotice(err.message || "Could not add item.", "error");
-  } finally {
-    saveState.textContent = "Idle";
-  }
-}
-    
-
+   
     function queueSave(itemId, field, value) {
       const key = `${itemId}:${field}`;
       clearTimeout(state.saveTimers.get(key));
       saveState.textContent = "Typing...";
       const timer = setTimeout(() => saveItemField(itemId, field, value), 900);
       state.saveTimers.set(key, timer);
-    }
-
-    async function saveItemField(itemId, field, value) {
-      const item = state.items.find((x) => String(x.itemId) === String(itemId));
-      if (item && String(item.status || "").toLowerCase() === "done") {
-        saveState.textContent = "Locked";
-        showNotice("Purchased items can\'t be edited.", "error");
-        return;
-      }
-
-      try {
-        saveState.textContent = "Saving...";
-        await request(`${ENDPOINTS.items}/${encodeURIComponent(itemId)}`, {
-          method: "PUT",
-          body: JSON.stringify({ field, value, familyId: state.familyId })
-        });
-        saveState.textContent = "Saved";
-        await loadItems();
-        notifySocket("items:updated", { familyId: state.familyId });
-      } catch (err) {
-        showNotice(err.message || "Unable to save item.", "error");
-        saveState.textContent = "Save failed";
-      }
-    }
-
-    async function deleteItem(itemId) {
-      const item = state.items.find((x) => String(x.itemId) === String(itemId));
-      if (item && String(item.status || "").toLowerCase() === "done") {
-        showNotice("Purchased items can\'t be deleted.", "error");
-        return;
-      }
-
-      if (!confirm("Delete this item?")) return;
-      try {
-        await request(`${ENDPOINTS.items}/${encodeURIComponent(itemId)}`, {
-          method: "DELETE",
-          body: JSON.stringify({ familyId: state.familyId })
-        });
-        showNotice("Item deleted.", "success");
-        await loadItems();
-        notifySocket("items:updated", { familyId: state.familyId });
-      } catch (err) {
-        showNotice(err.message || "Unable to delete item.", "error");
-      }
     }
 
     async function toggleItemActive(itemId) {
@@ -1710,77 +1956,43 @@ async function addItem() {
     }
 
     function bindItemEvents() {
-      itemsList.addEventListener("input", (e) => {
-        const target = e.target;
-        if (!target.matches("input[data-field]")) return;
+      const scheduleSave = (target) => {
+        if (!target) return;
+        if (!target.matches('input[data-field], select[data-field]')) return;
         if (target.closest(".item.purchased")) return;
+
         const itemId = target.dataset.id;
         const field = target.dataset.field;
         const value = target.value;
+
+        if (target.tagName === "SELECT") {
+          saveItemField(itemId, field, value);
+          return;
+        }
+
         queueSave(itemId, field, value);
+      };
+
+      itemsList.addEventListener("input", (e) => {
+        scheduleSave(e.target);
+      });
+
+      itemsList.addEventListener("change", (e) => {
+        scheduleSave(e.target);
       });
 
       itemsList.addEventListener("click", async (e) => {
         const btn = e.target.closest("button[data-action]");
         if (!btn) return;
+
         const action = btn.dataset.action;
         const itemId = btn.dataset.id;
+
         if (action === "delete") await deleteItem(itemId);
         if (action === "toggle") await toggleItemActive(itemId);
       });
     }
-
-
-function notifySocket(type, payload) {
-  if (state.socket && state.socket.readyState === WebSocket.OPEN) {
-    state.socket.send(JSON.stringify({ type, payload }));
-  }
-}
-
-    function setupSocket() {
-  if (!state.token || !state.familyId) {
-    setSocketStatus(false, "Missing token or familyId.");
-    return;
-  }
-
-  const wsUrl = `wss://grocery-api.sangeeth47.in/wss/?token=${encodeURIComponent(state.token)}&familyId=${encodeURIComponent(state.familyId)}`;
-
-  try {
-    state.socket = new WebSocket(wsUrl);
-
-    state.socket.addEventListener("open", () => {
-      setSocketStatus(true, "Realtime connection active.");
-    });
-
-    state.socket.addEventListener("close", () => {
-      setSocketStatus(false, "Realtime connection disconnected.");
-    });
-
-    state.socket.addEventListener("error", () => {
-      setSocketStatus(false, "Connection error.");
-    });
-
-    state.socket.addEventListener("message", async (event) => {
-      let msg;
-      try {
-        msg = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-
-      if (msg.type === "items:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
-        await loadItems();
-        showNotice("Family list updated in realtime.", "info");
-      }
-
-      if (msg.type === "purchase:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
-        await loadMissedPurchases();
-      }
-    });
-  } catch {
-    setSocketStatus(false, "Socket setup failed.");
-  }
-}
+    
 
     async function loadProfile() {
       try {
@@ -1888,12 +2100,12 @@ async function init() {
   setupSocket();
 }
 
-    window.addEventListener("beforeunload", () => {
-      localStorage.setItem("gro_selectedDate", getSelectedDate());
-      if (state.socket && typeof state.socket.disconnect === "function") {
-        state.socket.disconnect();
-      }
-    });
+window.addEventListener("beforeunload", () => {
+  localStorage.setItem("gro_selectedDate", getSelectedDate());
+  if (state.socket && typeof state.socket.close === "function") {
+    state.socket.close();
+  }
+});
 
     init();
   </script>
