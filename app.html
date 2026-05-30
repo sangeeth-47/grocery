@@ -833,18 +833,18 @@
                 <label for="rangeMode">Range</label>
                 <select id="rangeMode" class="range-select">
                   <option value="day">Today</option>
+                  <option value="yesterday">Yesterday</option>
                   <option value="week">Week</option>
                   <option value="custom">Custom</option>
                 </select>
+                <button class="btn today small" id="todayBtn">Today</button>
+                <button class="btn today small" id="yesterdayBtn">Yesterday</button>
               </div>
               <div class="range-fields" id="customRangeWrap" style="display:none;">
                 <input type="date" id="rangeStart" />
                 <input type="date" id="rangeEnd" />
               </div>
               <div class="calendar-wrap">
-                <div class="calendar-actions">
-                  <button class="btn today" id="todayBtn">Today</button>
-                </div>
                 <div class="divider"></div>
                 <div class="stack">
                   <div class="item">
@@ -954,7 +954,7 @@
       items: [],
       filteredItems: [],
       missed: [],
-      selectedDate: new Date().toISOString().slice(0, 10),
+      selectedDate: getTodayDate(),
       socket: null,
       saveTimers: new Map(),
       connected: false
@@ -1082,7 +1082,7 @@
     }
 
     function getSelectedDate() {
-      return datePicker.value || datePickerMirror.value || new Date().toISOString().slice(0, 10);
+      return datePicker.value || datePickerMirror.value || getTodayDate();
     }
 
 function updateSelectedDate(date) {
@@ -1097,14 +1097,67 @@ function updateSelectedDate(date) {
   loadMissedPurchases();
 }
 
+function syncTopBarDateFromRange() {
+  const selectedDate = state.rangeMode === "custom"
+    ? (state.rangeEnd || state.rangeStart || state.selectedDate)
+    : (state.rangeMode === "week"
+      ? (state.rangeEnd || state.selectedDate)
+      : (state.rangeMode === "yesterday"
+        ? getYesterdayDate()
+        : state.selectedDate));
+
+  if (!selectedDate) return;
+
+  state.selectedDate = selectedDate;
+  localStorage.setItem("gro_selectedDate", selectedDate);
+  datePicker.value = selectedDate;
+  datePickerMirror.value = selectedDate;
+}
+
 function toDateInputValue(date) {
   return String(date).slice(0, 10);
 }
 
+function getLocalDateValue(referenceDate = new Date()) {
+  const year = referenceDate.getFullYear();
+  const month = String(referenceDate.getMonth() + 1).padStart(2, "0");
+  const day = String(referenceDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDate() {
+  return getLocalDateValue(new Date());
+}
+
 function shiftDate(dateStr, deltaDays) {
-  const d = new Date(`${dateStr}T00:00:00`);
+  const [year, month, day] = String(dateStr).split("-").map(Number);
+  const d = new Date(year, month - 1, day);
   d.setDate(d.getDate() + deltaDays);
-  return d.toISOString().slice(0, 10);
+  return getLocalDateValue(d);
+}
+
+function getDateRangeDates(startDate, endDate) {
+  const start = normalizeDateValue(startDate);
+  const end = normalizeDateValue(endDate);
+  if (!start && !end) return [];
+  if (!start) return [end];
+  if (!end) return [start];
+
+  const from = start <= end ? start : end;
+  const to = start <= end ? end : start;
+  const dates = [];
+  let cursor = from;
+
+  while (cursor <= to) {
+    dates.push(cursor);
+    cursor = shiftDate(cursor, 1);
+  }
+
+  return dates;
+}
+
+function getYesterdayDate() {
+  return shiftDate(getTodayDate(), -1);
 }
 
 function syncRangeFromSelectedDate() {
@@ -1114,6 +1167,10 @@ function syncRangeFromSelectedDate() {
   if (state.rangeMode === "day") {
     state.rangeStart = selected;
     state.rangeEnd = selected;
+  } else if (state.rangeMode === "yesterday") {
+    const yesterday = getYesterdayDate();
+    state.rangeStart = yesterday;
+    state.rangeEnd = yesterday;
   } else if (state.rangeMode === "week") {
     state.rangeStart = shiftDate(selected, -6);
     state.rangeEnd = selected;
@@ -1128,6 +1185,8 @@ function syncRangeFromSelectedDate() {
   if (rangeEndInput) rangeEndInput.value = state.rangeEnd;
   localStorage.setItem("gro_rangeStart", state.rangeStart);
   localStorage.setItem("gro_rangeEnd", state.rangeEnd);
+
+  syncTopBarDateFromRange();
 }
 
 function setRangeMode(mode) {
@@ -1142,12 +1201,31 @@ function setRangeMode(mode) {
     customWrap.style.display = state.rangeMode === "custom" ? "grid" : "none";
   }
 
+  if (mode === "day") {
+    updateSelectedDate(getTodayDate());
+    return;
+  }
+
+  if (mode === "yesterday") {
+    updateSelectedDate(getYesterdayDate());
+    return;
+  }
+
   syncRangeFromSelectedDate();
+  loadItems();
 }
 
 function getMissedRange() {
   const mode = el("rangeMode").value || "day";
   const selected = getSelectedDate();
+
+  if (mode === "yesterday") {
+    const yesterday = getYesterdayDate();
+    return {
+      start: yesterday,
+      end: yesterday
+    };
+  }
 
   if (mode === "week") {
     return {
@@ -1181,13 +1259,18 @@ async function loadItems() {
   saveState.textContent = "Loading items...";
 
   try {
-    const date = getSelectedDate();
-    const data = await request(
-      `${ENDPOINTS.items}?familyId=${encodeURIComponent(state.familyId)}&date=${encodeURIComponent(date)}`,
-      { method: "GET" }
+    const mode = el("rangeMode")?.value || state.rangeMode || "day";
+    const { start, end } = getMissedRange();
+    const dates = mode === "day" ? [getSelectedDate()] : getDateRangeDates(start, end);
+
+    const responses = await Promise.all(
+      dates.map((date) => request(
+        `${ENDPOINTS.items}?familyId=${encodeURIComponent(state.familyId)}&date=${encodeURIComponent(date)}`,
+        { method: "GET" }
+      ))
     );
 
-    const list = Array.isArray(data) ? data : (data.items || []);
+    const list = responses.flatMap((data) => Array.isArray(data) ? data : (data.items || []));
     state.items = list.map(normalizeItem);
     state.filteredItems = [...state.items];
     filterItems();
@@ -1206,28 +1289,33 @@ function bindBuyerEvents() {
     const itemId = Number(itemEl.dataset.id);
     if (!itemId) return;
 
+    const currentStatus = String(itemEl.dataset.status || "").toLowerCase();
+    const nextStatus = currentStatus === "done" ? "pending" : "done";
+
+    if (currentStatus === "done" && !confirm("Mark this item as pending again?")) {
+      return;
+    }
+
     try {
-      await request(ENDPOINTS.purchases, {
-        method: "POST",
-        body: JSON.stringify({
-          itemId,
-          purchaseDate: getSelectedDate(),
-          status: "done",
-          note: "Purchased by buyer",
-          familyId: state.familyId
-        })
-      });
+        await request(ENDPOINTS.purchases, {
+          method: "POST",
+          body: JSON.stringify({
+            itemId,
+            status: nextStatus,
+            note: nextStatus === "done" ? "Purchased by buyer" : "Marked pending by buyer",
+            familyId: state.familyId
+          })
+        });
 
       await loadItems();
       await loadMissedPurchases();
-      showNotice("Marked as purchased.", "success");
+      showNotice(nextStatus === "done" ? "Marked as purchased." : "Marked as pending.", "success");
     } catch (err) {
-      showNotice(err.message || "Unable to mark as purchased.", "error");
+      showNotice(err.message || "Unable to update item status.", "error");
       await loadItems();
     }
   });
 }
-
 
     async function request(url, options = {}) {
       const response = await fetch(url, {
@@ -1358,10 +1446,11 @@ function bindBuyerEvents() {
         div.dataset.id = String(item.itemId ?? "");
         div.dataset.status = String(item.status || "").toLowerCase();
         div.style.cursor = "pointer";
+        const buyerMeta = item.updatedAt ? `Updated: ${formatDateTime(item.updatedAt)}` : formatItemMeta(item);
         div.innerHTML = `
           <div>
             <strong>${escapeHtml(item.itemName || "Unnamed item")}</strong>
-            <span>${escapeHtml(formatItemMeta(item))}</span>
+            <span>${escapeHtml(buyerMeta)}</span>
           </div>
           <div class="state ${item.status === "done" ? "done" : "pending"}">
             ${item.status === "done" ? "Purchased" : "Pending"}
@@ -1435,7 +1524,21 @@ function bindBuyerEvents() {
       if (!value) return "Unknown";
       const d = new Date(value);
       if (Number.isNaN(d.getTime())) return String(value);
-      return d.toLocaleString();
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = d.toLocaleString("en-US", { month: "short" }).toUpperCase();
+      const year = d.getFullYear();
+      const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+      return `${day}-${month}-${year}, ${time}`;
+    }
+
+    function formatDateShort(value) {
+      if (!value) return "Unknown";
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = d.toLocaleString("en-US", { month: "short" }).toUpperCase();
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
     }
 
     function escapeHtml(text) {
@@ -1451,21 +1554,6 @@ function bindBuyerEvents() {
       return escapeHtml(text).replaceAll("\n", " ");
     }
 
-    async function loadItems() {
-      if (!state.familyId) return;
-      saveState.textContent = "Loading items...";
-      try {
-        const data = await request(`${ENDPOINTS.items}?familyId=${encodeURIComponent(state.familyId)}`, { method: "GET" });
-        const list = Array.isArray(data) ? data : (data.items || []);
-        state.items = list.map(normalizeItem);
-        state.filteredItems = [...state.items];
-        filterItems();
-        saveState.textContent = "Loaded";
-      } catch (err) {
-        saveState.textContent = "Load failed";
-        showNotice(err.message || "Could not load items.", "error");
-      }
-    }
 
 async function loadMissedPurchases() {
   if (!state.familyId) return;
@@ -1510,7 +1598,7 @@ async function loadMissedPurchases() {
           <div>
             <div class="item-title">${escapeHtml(itemName)}</div>
             <div class="item-meta">
-              ${escapeHtml(itemDate)} ${escapeHtml(planned || note || "Missed item")}
+              ${escapeHtml(formatDateShort(itemDate))} ${escapeHtml(planned || note || "Missed item")}
             </div>
           </div>
           <div class="state pending">Missed</div>
@@ -1550,6 +1638,7 @@ async function addItem() {
     el("newItemName").value = "";
     el("newItemQty").value = "";
     el("newItemUnit").value = "";
+
     await loadItems();
     notifySocket("items:updated", { familyId: state.familyId });
     showNotice("Item added.", "success");
@@ -1641,41 +1730,7 @@ async function addItem() {
       });
     }
 
-function bindBuyerEvents() {
-  buyerList.addEventListener("click", async (e) => {
-    const itemEl = e.target.closest(".buyer-item");
-    if (!itemEl) return;
 
-    const itemId = Number(itemEl.dataset.id);
-    if (!itemId) return;
-    const currentStatus = String(itemEl.dataset.status || "").toLowerCase();
-    const nextStatus = currentStatus === "done" ? "pending" : "done";
-
-    if (currentStatus === "done" && !confirm("Mark this item as pending again?")) {
-      return;
-    }
-
-    try {
-      await request(ENDPOINTS.purchases, {
-        method: "POST",
-        body: JSON.stringify({
-          itemId,
-          purchaseDate: getSelectedDate(),
-          status: nextStatus,
-          note: nextStatus === "done" ? "Purchased by buyer" : "Marked pending by buyer",
-          familyId: state.familyId
-        })
-      });
-
-      await loadItems();
-      await loadMissedPurchases();
-      showNotice(nextStatus === "done" ? "Marked as purchased." : "Marked as pending.", "success");
-    } catch (err) {
-      showNotice(err.message || "Unable to update item status.", "error");
-      await loadItems();
-    }
-  });
-}
 function notifySocket(type, payload) {
   if (state.socket && state.socket.readyState === WebSocket.OPEN) {
     state.socket.send(JSON.stringify({ type, payload }));
@@ -1768,11 +1823,15 @@ function notifySocket(type, payload) {
       
       el("todayBtn").addEventListener("click", () => {
         setRangeMode("day");
-        updateSelectedDate(new Date().toISOString().slice(0, 10));
+        updateSelectedDate(getTodayDate());
+      });
+      el("yesterdayBtn").addEventListener("click", () => {
+        setRangeMode("yesterday");
+        updateSelectedDate(getYesterdayDate());
       });
       el("todayBtnMember").addEventListener("click", () => {
         setRangeMode("day");
-        updateSelectedDate(new Date().toISOString().slice(0, 10));
+        updateSelectedDate(getTodayDate());
       });
 
       el("addItemBtn").addEventListener("click", addItem);
@@ -1782,18 +1841,23 @@ function notifySocket(type, payload) {
       el("rangeMode").addEventListener("change", () => {
   setRangeMode(el("rangeMode").value);
 
+  loadItems();
   loadMissedPurchases();
 });
 
 el("rangeStart").addEventListener("change", () => {
   state.rangeStart = el("rangeStart").value;
   localStorage.setItem("gro_rangeStart", state.rangeStart);
+  syncTopBarDateFromRange();
+  loadItems();
   loadMissedPurchases();
 });
 
 el("rangeEnd").addEventListener("change", () => {
   state.rangeEnd = el("rangeEnd").value;
   localStorage.setItem("gro_rangeEnd", state.rangeEnd);
+  syncTopBarDateFromRange();
+  loadItems();
   loadMissedPurchases();
 });
       searchItems.addEventListener("input", filterItems);
@@ -1802,11 +1866,11 @@ el("rangeEnd").addEventListener("change", () => {
       bindBuyerEvents();
     }
 
-    async function init() {
+async function init() {
   if (!ensureLogin()) return;
   wireEvents();
 
-  state.selectedDate = localStorage.getItem("gro_selectedDate") || new Date().toISOString().slice(0, 10);
+  state.selectedDate = localStorage.getItem("gro_selectedDate") || getTodayDate();
   state.rangeMode = localStorage.getItem("gro_rangeMode") || "day";
   state.rangeStart = localStorage.getItem("gro_rangeStart") || state.selectedDate;
   state.rangeEnd = localStorage.getItem("gro_rangeEnd") || state.selectedDate;
@@ -1823,14 +1887,6 @@ el("rangeEnd").addEventListener("change", () => {
   await loadMissedPurchases();
   setupSocket();
 }
-
-    datePicker.addEventListener("change", () => {
-      localStorage.setItem("gro_selectedDate", datePicker.value);
-    });
-
-    datePickerMirror.addEventListener("change", () => {
-      localStorage.setItem("gro_selectedDate", datePickerMirror.value);
-    });
 
     window.addEventListener("beforeunload", () => {
       localStorage.setItem("gro_selectedDate", getSelectedDate());
