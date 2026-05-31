@@ -2172,7 +2172,7 @@ async function registerBuyerPush() {
     throw new Error("Notification permission denied.");
   }
 
-  const reg = await navigator.serviceWorker.register("/grocery/sw.js");
+  const reg = await navigator.serviceWorker.register("/sw.js");
 
   let subscription = await reg.pushManager.getSubscription();
   if (!subscription) {
