@@ -9,8 +9,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "New grocery item";
   const options = {
     body: data.body || "A new item was added.",
-    icon: "/assets/favicon-96x96.png",
-    badge: "/assets/favicon-96x96.png",
+    icon: "https://grocery.sangeeth47.in/assets/favicon-96x96.png",
+    badge: "https://grocery.sangeeth47.in/assets/favicon-96x96.png",
     data: data.url || "/"
   };
 
