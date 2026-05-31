@@ -881,6 +881,7 @@
                 </div>
                 <div class="quick">
                   <button class="btn secondary small" id="refreshBuyerBtn">Refresh</button>
+                  <button class="btn secondary small" id="enablePushBtn">Enable notifications</button>
                 </div>
               </div>
 
@@ -979,6 +980,7 @@
     </section>
   </div>
   <script>
+    const VAPID_PUBLIC_KEY = "BCk2a2SLonXBIwgTY48N7kx2jPP69_MWmhu6qlef7cT6WpLRK5qDgxWeLHKyWxQdshvnps6eDvSO-3T4SOsrt2o";
     const API_BASE = "https://grocery-api.sangeeth47.in";
     // Derive SOCKET_URL from API_BASE (preferred) or fall back to current origin.
     const SOCKET_URL = (function () {
@@ -2099,6 +2101,15 @@ function getMissedRange() {
         updateSelectedDate(getTodayDate());
       });
 
+      el("enablePushBtn").addEventListener("click", async () => {
+          try {
+            await registerBuyerPush();
+          } catch (err) {
+            showNotice(err.message || "Unable to enable notifications.", "error");
+          }
+        });
+
+
       el("addItemBtn").addEventListener("click", addItem);
       el("reloadItemsBtn").addEventListener("click", loadItems);
       el("refreshBuyerBtn").addEventListener("click", loadItems);
@@ -2130,6 +2141,64 @@ el("rangeEnd").addEventListener("change", () => {
       bindItemEvents();
       bindBuyerEvents();
     }
+
+
+//Notification service
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
+}
+
+async function registerBuyerPush() {
+  if (!("serviceWorker" in navigator)) {
+    throw new Error("Service worker is not supported.");
+  }
+
+  if (!("PushManager" in window)) {
+    throw new Error("Push is not supported.");
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    throw new Error("Notification permission denied.");
+  }
+
+  const reg = await navigator.serviceWorker.register("/grocery/sw.js");
+
+  let subscription = await reg.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+
+  const res = await fetch(`${API_BASE}/api/push/subscribe`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      subscription,
+      familyId: state.familyId,
+      role: state.defaultRole
+    })
+  });
+
+  if (!res.ok) {
+    throw new Error("Could not save push subscription.");
+  }
+
+  showNotice("Notifications enabled.", "success");
+}
+
 
 async function init() {
   if (!ensureLogin()) return;
