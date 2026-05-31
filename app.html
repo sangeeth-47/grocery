@@ -882,6 +882,7 @@
                 <div class="quick">
                   <button class="btn secondary small" id="refreshBuyerBtn">Refresh</button>
                   <button class="btn secondary small" id="enablePushBtn">Enable notifications</button>
+                  <div class="tiny" id="pushState">Idle</div>
                 </div>
               </div>
 
@@ -1441,6 +1442,7 @@ function setupSocket() {
     const memberItemsCount = el("memberItemsCount");
     const searchItems = el("searchItems");
     const saveState = el("saveState");
+    const pushState = el("pushState");
     const socketDot = el("socketDot");
     const socketStatus = el("socketStatus");
 
@@ -1974,6 +1976,60 @@ function getMissedRange() {
     function escapeAttr(text) {
       return escapeHtml(text).replaceAll("\n", " ");
     }
+
+    function setPushUi(text, disabled = false) {
+      if (pushState) pushState.textContent = text;
+      const button = el("enablePushBtn");
+      if (button) button.disabled = disabled;
+    }
+
+    function setPushButtonSubscribed(isSubscribed) {
+      const button = el("enablePushBtn");
+      if (!button) return;
+      button.textContent = isSubscribed ? "Disable notifications" : "Enable notifications";
+      button.dataset.mode = isSubscribed ? "unsubscribe" : "subscribe";
+      button.classList.toggle("danger", isSubscribed);
+      button.classList.toggle("secondary", !isSubscribed);
+    }
+
+    function getServiceWorkerUrl() {
+      try {
+        return new URL("sw.js", window.location.href).toString();
+      } catch {
+        return "sw.js";
+      }
+    }
+
+    async function syncPushButtonState() {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        setPushUi("Enable notifications", true);
+        return;
+      }
+
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const subscriptionFound = await Promise.all(
+          registrations.map(async (reg) => {
+            try {
+              return Boolean(await reg.pushManager.getSubscription());
+            } catch {
+              return false;
+            }
+          })
+        );
+
+        if (subscriptionFound.some(Boolean)) {
+          setPushButtonSubscribed(true);
+          setPushUi("Activated", false);
+        } else {
+          setPushButtonSubscribed(false);
+          setPushUi("Enable notifications", false);
+        }
+      } catch {
+        setPushButtonSubscribed(false);
+        setPushUi("Enable notifications", false);
+      }
+    }
    
     function queueSave(itemId, field, value) {
       const key = `${itemId}:${field}`;
@@ -2142,8 +2198,7 @@ el("rangeEnd").addEventListener("change", () => {
       bindBuyerEvents();
     }
 
-
-//Notification service
+// Notification service
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - base64String.length % 4) % 4);
@@ -2167,38 +2222,108 @@ async function registerBuyerPush() {
     throw new Error("Push is not supported.");
   }
 
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    throw new Error("Notification permission denied.");
-  }
+  const button = el("enablePushBtn");
+  const mode = String(button?.dataset.mode || "subscribe").toLowerCase();
+  const isUnsubscribe = mode === "unsubscribe";
 
-  const reg = await navigator.serviceWorker.register("/sw.js");
+  setPushUi(
+    isUnsubscribe
+      ? "Removing grocery subscription..."
+      : "Activating grocery subscription...",
+    true
+  );
 
-  let subscription = await reg.pushManager.getSubscription();
-  if (!subscription) {
-    subscription = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+  try {
+    const swUrl = getServiceWorkerUrl();
+    const retryDelays = [0, 250, 500, 1000, 1500];
+    let lastError = null;
+    let reg = null;
+
+    for (const delayMs of retryDelays) {
+      if (delayMs) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      try {
+        reg = await navigator.serviceWorker.register(swUrl);
+        break;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    if (!reg) {
+      throw lastError || new Error("Service worker unavailable. Please try again.");
+    }
+
+    const subscription = await reg.pushManager.getSubscription();
+
+    if (isUnsubscribe) {
+      if (!subscription) {
+        setPushButtonSubscribed(false);
+        setPushUi("Idle", false);
+        showNotice("No active notification subscription found.", "info");
+        return;
+      }
+
+      const endpoint = subscription.endpoint;
+
+      const res = await fetch(`${API_BASE}/api/push/unsubscribe`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          familyId: state.familyId,
+          endpoint
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error("Could not remove push subscription.");
+      }
+
+      await subscription.unsubscribe();
+
+      setPushButtonSubscribed(false);
+      setPushUi("Idle", false);
+      showNotice("Notifications disabled.", "success");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      throw new Error("Notification permission denied.");
+    }
+
+    let activeSubscription = subscription;
+    if (!activeSubscription) {
+      activeSubscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    const res = await fetch(`${API_BASE}/api/push/subscribe`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        subscription: activeSubscription,
+        familyId: state.familyId,
+        role: state.defaultRole
+      })
     });
+
+    if (!res.ok) {
+      throw new Error("Could not save push subscription.");
+    }
+
+    setPushUi("Activated", true);
+    setPushButtonSubscribed(true);
+    showNotice("Notifications enabled.", "success");
+  } catch (err) {
+    setPushUi("Idle", false);
+    throw err;
   }
-
-  const res = await fetch(`${API_BASE}/api/push/subscribe`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      subscription,
-      familyId: state.familyId,
-      role: state.defaultRole
-    })
-  });
-
-  if (!res.ok) {
-    throw new Error("Could not save push subscription.");
-  }
-
-  showNotice("Notifications enabled.", "success");
 }
-
 
 async function init() {
   if (!ensureLogin()) return;
@@ -2217,6 +2342,7 @@ async function init() {
   setRangeMode(state.rangeMode);
 
   await loadProfile();
+  await syncPushButtonState();
   await loadItems();
   await loadMissedPurchases();
   setupSocket();
