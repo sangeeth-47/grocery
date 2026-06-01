@@ -876,7 +876,7 @@
                   <div class="subtext">Realtime family grocery list. Updates arrive immediately when items are edited.</div>
                 </div>
                 <div class="quick">
-                  <button class="btn secondary small" id="refreshBuyerBtn">Refresh</button>
+                  <button class="btn secondary small" id="refreshBuyerBtn">Reset View</button>
                   <button class="btn secondary small" id="enablePushBtn">Enable notifications</button>
                   <div class="tiny" id="pushState">Idle</div>
                 </div>
@@ -1018,6 +1018,8 @@ const state = {
   filteredItems: [],
   missed: [],
   selectedDate: getTodayDate(),
+  buyerDefaultItems: [],
+  buyerViewMode: "default", 
   buyerPendingConfirmItemId: null,
   memberPendingDeleteItemId: null,
   socket: null,
@@ -1331,6 +1333,28 @@ function bindBuyerEvents() {
   });
 }
 
+async function loadBuyerDefaultItems() {
+  if (!state.familyId) return;
+
+  saveState.textContent = "Loading pending items...";
+
+  try {
+    const payload = await sendSocketRequest("buyer-default:get", {
+      familyId: Number(state.familyId)
+    });
+
+    const list = Array.isArray(payload?.items) ? payload.items : [];
+    state.buyerDefaultItems = list.map(normalizeItem);
+    state.buyerViewMode = "default";
+    renderBuyerList();
+    updateBuyerProgressKpi();
+    saveState.textContent = "Loaded";
+  } catch (err) {
+    saveState.textContent = "Load failed";
+    showNotice(err.message || "Could not load pending items.", "error");
+  }
+}
+
 function setupSocket() {
   if (!state.token || !state.familyId) {
     setSocketStatus(false, "Missing token or familyId.");
@@ -1338,120 +1362,115 @@ function setupSocket() {
     return state.socketReadyPromise;
   }
 
-  const wsUrl = `wss://grocery-api.sangeeth47.in/wss/?token=${encodeURIComponent(state.token)}&familyId=${encodeURIComponent(state.familyId)}`;
-
-  try {
-    if (
-      state.socket &&
-      (state.socket.readyState === WebSocket.OPEN ||
-        state.socket.readyState === WebSocket.CONNECTING)
-    ) {
-      return state.socketReadyPromise || Promise.resolve();
-    }
-
-    state.socketReadyPromise = new Promise((resolve, reject) => {
-      let opened = false;
-      let reconnectTimer = null;
-
-      const cleanup = () => {
-        state.socketReadyPromise = null;
-        if (reconnectTimer) {
-          clearTimeout(reconnectTimer);
-          reconnectTimer = null;
-        }
-      };
-
-      const reconnect = () => {
-        cleanup();
-        if (!state.token || !state.familyId) return;
-
-        reconnectTimer = setTimeout(() => {
-          setupSocket();
-        }, 2000);
-      };
-
-      state.socket = new WebSocket(wsUrl);
-
-      state.socket.addEventListener("open", () => {
-        opened = true;
-        setSocketStatus(true, "Realtime connection active.");
-        cleanup();
-        resolve();
-      });
-
-      state.socket.addEventListener("close", (e) => {
-        console.log("WS closed:", e.code, e.reason || "(no reason)");
-        setSocketStatus(false, "Realtime connection disconnected.");
-        rejectAllPendingSocketRequests(new Error("Socket closed."));
-
-        state.socket = null;
-        cleanup();
-
-        if (!opened) {
-          reject(new Error(`Socket connection failed (${e.code}).`));
-          return;
-        }
-
-        reconnect();
-      });
-
-      state.socket.addEventListener("error", (e) => {
-        console.log("WS error:", e);
-        setSocketStatus(false, "Connection error.");
-        rejectAllPendingSocketRequests(new Error("Socket error."));
-
-        state.socket = null;
-        cleanup();
-
-        if (!opened) {
-          reject(new Error("Socket connection failed."));
-          return;
-        }
-
-        reconnect();
-      });
-
-      state.socket.addEventListener("message", async (event) => {
-        let msg;
-        try {
-          msg = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-
-        if (msg.requestId && state.pendingSocketRequests?.has(msg.requestId)) {
-          const pending = state.pendingSocketRequests.get(msg.requestId);
-          state.pendingSocketRequests.delete(msg.requestId);
-
-          if (msg.type === "error") {
-            pending.reject(new Error(msg.payload?.message || "Request failed"));
-          } else {
-            pending.resolve(msg.payload);
-          }
-          return;
-        }
-
-        if (msg.type === "items:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
-          await loadItems();
-          showNotice("Family list updated in realtime.", "info");
-          return;
-        }
-
-        if (msg.type === "purchase:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
-          await Promise.all([loadItems(), loadMissedPurchases()]);
-          return;
-        }
-      });
-    });
-
-    return state.socketReadyPromise;
-  } catch (err) {
-    setSocketStatus(false, "Socket setup failed.");
-    state.socketReadyPromise = null;
-    return Promise.reject(err);
+  if (
+    state.socket &&
+    (state.socket.readyState === WebSocket.OPEN ||
+      state.socket.readyState === WebSocket.CONNECTING)
+  ) {
+    return state.socketReadyPromise || Promise.resolve();
   }
-}
 
+  const wsUrl = "wss://grocery-api.sangeeth47.in/wss/";
+  state.socketAuthed = false;
+
+  state.socketReadyPromise = new Promise((resolve, reject) => {
+    let opened = false;
+    let authDone = false;
+
+    state.socket = new WebSocket(wsUrl);
+
+    state.socket.onopen = () => {
+      opened = true;
+
+      state.socket.send(JSON.stringify({
+        type: "auth",
+        token: state.token,
+        familyId: state.familyId
+      }));
+    };
+
+    state.socket.onmessage = async (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (msg.type === "auth_ok") {
+        authDone = true;
+        state.socketAuthed = true;
+        setSocketStatus(true, "Realtime connection active.");
+        resolve();
+
+        await Promise.all([loadItems(), loadMissedPurchases()]);
+        return;
+      }
+
+      if (msg.type === "auth_error") {
+        setSocketStatus(false, msg.payload?.message || "Auth failed.");
+        rejectAllPendingSocketRequests(new Error(msg.payload?.message || "Auth failed."));
+        try { state.socket.close(); } catch {}
+        reject(new Error(msg.payload?.message || "Auth failed."));
+        return;
+      }
+
+      if (msg.requestId && state.pendingSocketRequests?.has(msg.requestId)) {
+        const pending = state.pendingSocketRequests.get(msg.requestId);
+        state.pendingSocketRequests.delete(msg.requestId);
+
+        if (msg.type === "error") {
+          pending.reject(new Error(msg.payload?.message || "Request failed"));
+        } else {
+          pending.resolve(msg.payload);
+        }
+        return;
+      }
+
+      if (msg.type === "items:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
+        if (!isMemberRole() && state.buyerViewMode === "default") {
+          await loadBuyerDefaultItems();
+        } else {
+          await loadItems();
+        }
+        showNotice("Family list updated in realtime.", "info");
+        return;
+      }
+
+      if (msg.type === "purchase:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
+        if (!isMemberRole() && state.buyerViewMode === "default") {
+          await loadBuyerDefaultItems();
+        } else {
+          await Promise.all([loadItems(), loadMissedPurchases()]);
+        }
+        return;
+      }
+    };
+
+    state.socket.onclose = (e) => {
+      console.log("WS closed:", e.code, e.reason || "(no reason)");
+      setSocketStatus(false, "Realtime connection disconnected.");
+      rejectAllPendingSocketRequests(new Error("Socket closed."));
+
+      state.socketReadyPromise = null;
+      state.socketAuthed = false;
+      state.socket = null;
+
+      if (!opened || !authDone) {
+        reject(new Error(`Socket connection failed (${e.code}).`));
+        return;
+      }
+
+      setTimeout(() => setupSocket(), 2500);
+    };
+
+    state.socket.onerror = () => {
+      setSocketStatus(false, "Connection error.");
+    };
+  });
+
+  return state.socketReadyPromise;
+}
 
     const el = (id) => document.getElementById(id);
 
@@ -1849,57 +1868,69 @@ function getMissedRange() {
     }
 
     function renderBuyerList() {
-      buyerList.innerHTML = "";
-      const items = getVisibleBuyerItems().filter((x) => x.isActive !== false);
-      const mode = el("rangeMode")?.value || state.rangeMode || "day";
-      const { start, end } = getMissedRange();
+    buyerList.innerHTML = "";
 
-      if (!items.length) {
-        buyerEmpty.style.display = "block";
-        buyerEmpty.textContent = mode === "day"
-          ? "No items found for this date."
-          : `No items found from ${start} to ${end}.`;
-        return;
-      }
+    const items = isMemberRole()
+      ? []
+      : (state.buyerViewMode === "default"
+          ? state.buyerDefaultItems
+          : getVisibleBuyerItems());
 
-      buyerEmpty.style.display = "none";
-      items.forEach((item) => {
-        const div = document.createElement("div");
-        div.className = "buyer-item";
-        div.dataset.id = String(item.itemId ?? "");
-        div.dataset.status = String(item.status || "").toLowerCase();
-        div.style.cursor = "pointer";
-        const buyerMetaParts = [];
-        if (item.quantity) buyerMetaParts.push(`Qty: ${item.quantity}`);
-        if (item.unit) buyerMetaParts.push(`Unit: ${item.unit}`);
-        if (item.updatedAt) buyerMetaParts.push(`Updated: ${formatDateTime(item.updatedAt)}`);
-        const buyerMeta = buyerMetaParts.length ? buyerMetaParts.join(" • ") : "No extra details";
-        const showInlinePrompt = String(state.buyerPendingConfirmItemId) === String(item.itemId) && String(item.status || "").toLowerCase() === "done";
-        div.innerHTML = `
-          <div>
-            <strong>${escapeHtml(item.itemName || "Unnamed item")}</strong>
-            <span>${escapeHtml(buyerMeta)}</span>
-          </div>
-          <div style="display:grid; gap:8px; justify-items:end;">
-            <div class="state ${item.status === "done" ? "done" : "pending"}">
-              ${item.status === "done" ? "Purchased" : "Pending"}
-            </div>
-            ${showInlinePrompt ? `
-              <div class="inline-confirm">
-                <div class="prompt">Move this item back to pending?</div>
-                <div class="inline-confirm-actions">
-                  <button class="btn yes" type="button" data-action="confirm-pending" data-id="${item.itemId}">Yes</button>
-                  <button class="btn no" type="button" data-action="cancel-pending" data-id="${item.itemId}">No</button>
-                </div>
-              </div>
-            ` : ""}
-          </div>
-        `;
-        buyerList.appendChild(div);
-      });
+    const mode = state.buyerViewMode === "default"
+      ? "default"
+      : (el("rangeMode")?.value || state.rangeMode || "day");
 
-      updateBuyerProgressKpi();
+    if (!items.length) {
+      buyerEmpty.style.display = "block";
+      buyerEmpty.textContent = mode === "default"
+        ? "No pending items found."
+        : "No items found for this date.";
+      return;
     }
+
+    buyerEmpty.style.display = "none";
+
+    items.forEach((item) => {
+      const div = document.createElement("div");
+      div.className = "buyer-item";
+      div.dataset.id = String(item.itemId ?? "");
+      div.dataset.status = String(item.status || "").toLowerCase();
+      div.style.cursor = "pointer";
+
+      const buyerMetaParts = [];
+      if (item.quantity) buyerMetaParts.push(`Qty: ${item.quantity}`);
+      if (item.unit) buyerMetaParts.push(`Unit: ${item.unit}`);
+      if (item.updatedAt) buyerMetaParts.push(`Updated: ${formatDateTime(item.updatedAt)}`);
+      const buyerMeta = buyerMetaParts.length ? buyerMetaParts.join(" • ") : "No extra details";
+      const showInlinePrompt = String(state.buyerPendingConfirmItemId) === String(item.itemId) && String(item.status || "").toLowerCase() === "done";
+
+      div.innerHTML = `
+        <div>
+          <strong>${escapeHtml(item.itemName || "Unnamed item")}</strong>
+          <span>${escapeHtml(buyerMeta)}</span>
+        </div>
+        <div style="display:grid; gap:8px; justify-items:end;">
+          <div class="state ${item.status === "done" ? "done" : "pending"}">
+            ${item.status === "done" ? "Purchased" : "Pending"}
+          </div>
+          ${showInlinePrompt ? `
+            <div class="inline-confirm">
+              <div class="prompt">Move this item back to pending?</div>
+              <div class="inline-confirm-actions">
+                <button class="btn yes" type="button" data-action="confirm-pending" data-id="${item.itemId}">Yes</button>
+                <button class="btn no" type="button" data-action="cancel-pending" data-id="${item.itemId}">No</button>
+              </div>
+            </div>
+          ` : ""}
+        </div>
+      `;
+
+      buyerList.appendChild(div);
+    });
+
+    updateBuyerProgressKpi();
+  }
+
 
     function renderItemsList() {
       itemsList.innerHTML = "";
@@ -2155,6 +2186,10 @@ function getMissedRange() {
       window.location.href = ENDPOINTS.login;
     }
 
+    function switchToDateView() {
+      state.buyerViewMode = "date";
+    }
+    
     function wireEvents() {
       document.querySelectorAll(".tab-btn").forEach((btn) => {
         btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
@@ -2163,19 +2198,27 @@ function getMissedRange() {
       datePicker.addEventListener("click", () => openDatePicker(datePicker));
       datePickerMirror.addEventListener("click", () => openDatePicker(datePickerMirror));
 
-      datePicker.addEventListener("change", () => updateSelectedDate(datePicker.value));
-      datePickerMirror.addEventListener("change", () => updateSelectedDate(datePickerMirror.value));
-
+      datePicker.addEventListener("change", () => {
+  switchToDateView();
+  updateSelectedDate(datePicker.value);
+});
+      datePickerMirror.addEventListener("change", () => {
+  switchToDateView();
+  updateSelectedDate(datePickerMirror.value);
+});
       
       el("todayBtn").addEventListener("click", () => {
+        switchToDateView();
         setRangeMode("day");
         updateSelectedDate(getTodayDate());
       });
       el("yesterdayBtn").addEventListener("click", () => {
+        switchToDateView();
         setRangeMode("yesterday");
         updateSelectedDate(getYesterdayDate());
       });
       el("todayBtnMember").addEventListener("click", () => {
+        switchToDateView();
         setRangeMode("day");
         updateSelectedDate(getTodayDate());
       });
@@ -2191,16 +2234,20 @@ function getMissedRange() {
 
       el("addItemBtn").addEventListener("click", addItem);
       el("reloadItemsBtn").addEventListener("click", loadItems);
-      el("refreshBuyerBtn").addEventListener("click", loadItems);
+      el("refreshBuyerBtn").addEventListener("click", () => {
+  state.buyerViewMode = "default";
+  loadBuyerDefaultItems();
+});
         el("logoutTopBtn").addEventListener("click", logout);
       el("rangeMode").addEventListener("change", () => {
+  switchToDateView();
   setRangeMode(el("rangeMode").value);
-
   loadItems();
   loadMissedPurchases();
 });
 
 el("rangeStart").addEventListener("change", () => {
+  switchToDateView();
   state.rangeStart = el("rangeStart").value;
   localStorage.setItem("gro_rangeStart", state.rangeStart);
   syncTopBarDateFromRange();
@@ -2209,6 +2256,7 @@ el("rangeStart").addEventListener("change", () => {
 });
 
 el("rangeEnd").addEventListener("change", () => {
+  switchToDateView();
   state.rangeEnd = el("rangeEnd").value;
   localStorage.setItem("gro_rangeEnd", state.rangeEnd);
   syncTopBarDateFromRange();
@@ -2366,8 +2414,12 @@ async function init() {
 
   await loadProfile();
   await syncPushButtonState();
-  await loadItems();
-  await loadMissedPurchases();
+  if (isMemberRole()) {
+    await loadItems();
+    await loadMissedPurchases();
+  } else {
+    await loadBuyerDefaultItems();
+  }
   setupSocket();
 }
 
