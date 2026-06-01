@@ -1335,41 +1335,80 @@ function setupSocket() {
   if (!state.token || !state.familyId) {
     setSocketStatus(false, "Missing token or familyId.");
     state.socketReadyPromise = Promise.reject(new Error("Missing token or familyId."));
-    return;
+    return state.socketReadyPromise;
   }
 
   const wsUrl = `wss://grocery-api.sangeeth47.in/wss/?token=${encodeURIComponent(state.token)}&familyId=${encodeURIComponent(state.familyId)}`;
 
   try {
-    if (state.socket && (state.socket.readyState === WebSocket.OPEN || state.socket.readyState === WebSocket.CONNECTING)) {
-      return;
+    if (
+      state.socket &&
+      (state.socket.readyState === WebSocket.OPEN ||
+        state.socket.readyState === WebSocket.CONNECTING)
+    ) {
+      return state.socketReadyPromise || Promise.resolve();
     }
 
     state.socketReadyPromise = new Promise((resolve, reject) => {
       let opened = false;
+      let reconnectTimer = null;
+
+      const cleanup = () => {
+        state.socketReadyPromise = null;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+      };
+
+      const reconnect = () => {
+        cleanup();
+        if (!state.token || !state.familyId) return;
+
+        reconnectTimer = setTimeout(() => {
+          setupSocket();
+        }, 2000);
+      };
 
       state.socket = new WebSocket(wsUrl);
 
       state.socket.addEventListener("open", () => {
         opened = true;
         setSocketStatus(true, "Realtime connection active.");
+        cleanup();
         resolve();
       });
 
-      state.socket.addEventListener("close", () => {
+      state.socket.addEventListener("close", (e) => {
+        console.log("WS closed:", e.code, e.reason || "(no reason)");
         setSocketStatus(false, "Realtime connection disconnected.");
         rejectAllPendingSocketRequests(new Error("Socket closed."));
+
+        state.socket = null;
+        cleanup();
+
         if (!opened) {
-          reject(new Error("Socket connection failed."));
+          reject(new Error(`Socket connection failed (${e.code}).`));
+          return;
         }
+
+        reconnect();
       });
 
-      state.socket.addEventListener("error", () => {
+      state.socket.addEventListener("error", (e) => {
+        console.log("WS error:", e);
         setSocketStatus(false, "Connection error.");
         rejectAllPendingSocketRequests(new Error("Socket error."));
+
+        state.socket = null;
+        cleanup();
+
         if (!opened) {
           reject(new Error("Socket connection failed."));
+          return;
         }
+
+        reconnect();
       });
 
       state.socket.addEventListener("message", async (event) => {
@@ -1399,20 +1438,19 @@ function setupSocket() {
         }
 
         if (msg.type === "purchase:updated" && String(msg.payload?.familyId) === String(state.familyId)) {
-          await Promise.all([
-            loadItems(),
-            loadMissedPurchases()
-          ]);
+          await Promise.all([loadItems(), loadMissedPurchases()]);
           return;
         }
       });
     });
-  } catch {
+
+    return state.socketReadyPromise;
+  } catch (err) {
     setSocketStatus(false, "Socket setup failed.");
-    state.socketReadyPromise = Promise.reject(new Error("Socket setup failed."));
+    state.socketReadyPromise = null;
+    return Promise.reject(err);
   }
 }
-
 
 
     const el = (id) => document.getElementById(id);
