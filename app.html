@@ -1205,7 +1205,7 @@ async function addItem() {
 
     el("newItemName").value = "";
     el("newItemQty").value = "";
-    el("newItemUnit").value = "";
+    el("newItemUnit").value = "NOS";
 
     await loadItems();
     showNotice("Item added.", "success");
