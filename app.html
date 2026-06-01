@@ -943,6 +943,7 @@
                 <input id="newItemName" class="span-2" type="text" placeholder="Item name" />
                 <input id="newItemQty" type="text" placeholder="Qty" />
                 <select id="newItemUnit">
+                  <option value="GRAM">GRAM</option>
                   <option value="KG">KG</option>
                   <option value="LITRE">LITRE</option>
                   <option value="NOS" selected>NOS</option>
@@ -1924,6 +1925,7 @@ function getMissedRange() {
               <input type="text" value="${escapeAttr(item.itemName || "")}" data-field="itemName" data-id="${item.itemId}" placeholder="Item" ${purchased ? "disabled" : ""} />
               <input type="text" value="${escapeAttr(item.quantity || "")}" data-field="quantity" data-id="${item.itemId}" placeholder="Count" ${purchased ? "disabled" : ""} />
               <select data-field="unit" data-id="${item.itemId}" ${purchased ? "disabled" : ""}>
+                <option value="GRAM" ${String(item.unit).toUpperCase() === "GRAM" ? "selected" : ""}>GRAM</option>
                 <option value="KG" ${String(item.unit).toUpperCase() === "KG" ? "selected" : ""}>KG</option>
                 <option value="LITRE" ${String(item.unit).toUpperCase() === "LITRE" ? "selected" : ""}>LITRE</option>
                 <option value="NOS" ${!item.unit || String(item.unit).toUpperCase() === "NOS" ? "selected" : ""}>NOS</option>
