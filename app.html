@@ -668,7 +668,7 @@
 
     .kpi {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       margin-bottom: 16px;
     }
@@ -858,11 +858,7 @@
       <div class="content">
         <div class="kpi">
           <div class="box">
-            <div class="label">Family ID</div>
-            <div class="value" id="kpiFamilyId">-</div>
-          </div>
-          <div class="box">
-            <div class="label">Role</div>
+            <div class="label">Pending</div>
             <div class="value" id="kpiRole">-</div>
           </div>
           <div class="box">
@@ -1423,8 +1419,7 @@ function setupSocket() {
 
     const familyTitle = el("familyTitle");
     const memberInfo = el("memberInfo");
-    const kpiFamilyId = el("kpiFamilyId");
-    const kpiRoleLabel = document.querySelector(".kpi .box:nth-child(2) .label");
+    const kpiRoleLabel = document.querySelector(".kpi .box:first-child .label");
     const kpiRole = el("kpiRole");
     const kpiItems = el("kpiItems");
     const datePicker = el("datePicker");
@@ -1489,7 +1484,6 @@ function setupSocket() {
       state.roleLabel = label;
       familyTitle.textContent = state.familyName ? `${state.familyName}` : "Grocery Family";
       memberInfo.textContent = `${state.mobile || "Unknown"} • ${label}`;
-      kpiFamilyId.textContent = state.familyId || "-";
       datePicker.value = state.selectedDate;
       datePickerMirror.value = state.selectedDate;
       if (memberItemsStat) memberItemsStat.style.display = isMemberRole() ? "block" : "none";
@@ -1808,18 +1802,12 @@ function getMissedRange() {
       const activeTab = document.querySelector(".tab-btn.active")?.dataset.tab || "buyer";
       const visibleItems = activeTab === "items" ? getVisibleActiveItems() : getVisibleBuyerItems();
       const pendingCount = visibleItems.filter((item) => item.status !== "done").length;
-      const totalCount = visibleItems.length;
-      const roleLabel = state.roleLabel || (state.defaultRole === "buyer" ? "Buyer" : "Member");
 
       if (kpiRoleLabel) {
-        kpiRoleLabel.textContent = activeTab === "items" || activeTab === "buyer" ? "Pending" : "Role";
+        kpiRoleLabel.textContent = "Pending";
       }
 
-      if (activeTab === "items" || activeTab === "buyer") {
-        kpiRole.textContent = `${pendingCount} / ${totalCount}`;
-      } else {
-        kpiRole.textContent = roleLabel;
-      }
+      kpiRole.textContent = String(pendingCount);
     }
 
     function renderBuyerList() {
@@ -2037,7 +2025,7 @@ function getMissedRange() {
       const key = `${itemId}:${field}`;
       clearTimeout(state.saveTimers.get(key));
       saveState.textContent = "Typing...";
-      const timer = setTimeout(() => saveItemField(itemId, field, value), 900);
+      const timer = setTimeout(() => saveItemField(itemId, field, value), 2000);
       state.saveTimers.set(key, timer);
     }
 
@@ -2057,11 +2045,6 @@ function getMissedRange() {
         const itemId = target.dataset.id;
         const field = target.dataset.field;
         const value = target.value;
-
-        if (target.tagName === "SELECT") {
-          saveItemField(itemId, field, value);
-          return;
-        }
 
         queueSave(itemId, field, value);
       };
